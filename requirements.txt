@@ -1,0 +1,5 @@
+python>=3.9
+torch>=1.13.1
+torch-geometric>=2.2.0
+pytorch-lightning>=1.9.2
+hipopy>=1.2.4
