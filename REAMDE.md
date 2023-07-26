@@ -3,8 +3,8 @@
 Graph Neural Networks (GNNs) for $\Lambda$ hyperon identification at [CLAS12](https://www.jlab.org/physics/hall-b/clas12).
 
 Required python modules (all available with pip) are listed in [requirements.txt](requirements.txt).
-* Examples of creating datasets, training a model and running hyperparamter optimization are provided in [tutorials][tutorials/].
-* Notebook versions are in [tutorials/ipynb][tutorials/ipynb].
+* Examples of creating datasets, training a model and running hyperparamter optimization are provided in [tutorials](tutorials/).
+* Notebook versions are in [tutorials/ipynb](tutorials/ipynb).
 
 ## Creating a CUDA Virtual Environment
 
