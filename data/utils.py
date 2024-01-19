@@ -30,44 +30,107 @@ import tqdm
 # Local
 import data
 import models
+import classification
 
-def train(config):
+def train(model,dataloader,optimizer,criterion,epochs=100,scheduler=None,log_path="",use_wandb=True):
     """
     :param: config
     """
-    pass
 
-def test(config):
+    logs = []
+    for epoch in tqdm(range(epochs)):
+
+        # Train model
+        classification.train(
+            model,
+            dataloader,
+            optimizer,
+            criterion
+        )
+
+        # Validate model
+        loss, outs, preds, ys, kins = classification.test(
+            model,
+            dataloader,
+            criterion,
+            get_kins = False
+        )
+
+        # Get binary classification metrics
+        accuracy, precision, recall, precision_n, recall_n, roc_auc, plots = classification.get_binary_classification_metrics(preds,ys,kins=None,get_plots=False)
+
+        # Log to wandb
+        if use_wandb:
+            wandb.log({
+                'accuracy':accuracy,
+                'precision':precision,
+                'recall':recall,
+                'roc_auc':roc_auc,
+                **optimizer.param_groups[0]['lr'], #NOTE: Check this...
+            })
+
+        # Step learning rate
+        if scheduler is not None: scheduler.step()
+
+
+def test(model,dataloader,criterion,use_wandb=True):
     """
     :param: config
     """
-    pass
+    loss, outs, preds, ys, kins = classification.test(
+        model,
+        dataloader,
+        criterion,
+        return_kins=True
+    )
 
-def apply(config):
+    # Get binaray classification metrics
+    accuracy, precision, recall, precision_n, recall_n, roc_auc, plots = classification.get_binary_classification_metrics(preds,ys,return_plots=True)
+
+    # Log to wandb
+    if use_wandb:
+        wandb.log({
+            'accuracy':accuracy,
+            'precision':precision,
+            'recall':recall,
+            'roc_auc':roc_auc,
+            **plots
+        })
+
+
+def apply(config,use_wandb=True):
     """
     :param: config
     """
-    pass
+    loss, outs, preds, kins = classification.test_nolabels(
+        model,
+        dataloader,
+    )
 
 def experiment(config,use_wanbd=True):
     """
     :param: config
     """
 
+    # Unpack config
+    model = config['model']
+
     # Log experiment config
-    if use_wanbd: wandb.init(**config)
+    if use_wanbd:
+        wandb.init(**config)
+        wandb.watch(model)
 
     # Run training validation and testing
-    train_val = train(config)
-    test_val  = test(config)
-    apply_val = apply(config)
+    train_val = train(config,use_wandb=use_wandb)
+    test_val  = test(config,use_wandb=use_wandb)
+    apply_val = apply(config,use_wandb=use_wandb)
 
     # Finish experiment
     if use_wanbd: wandb.finish()
 
     return train_val, test_val, apply_val
 
-def optimize(opt_par_lims,default_config):
+def optimize(opt_par_lims,default_config,study_name="study",direction="minimize",):
     """
     :param: opt_config
     :param: opt_par_lims
@@ -81,8 +144,9 @@ def optimize(opt_par_lims,default_config):
         #TODO: Suggest trial params and substitute into trial_config
 
         experiment_val = experiment(trial_config)
+        roc_auc = 
 
-        return experiment_val
+        return 1.0-roc_auc
 
     # Load or create pruner, sampler, and study
     pruner = optuna.pruners.MedianPruner() if opt_config['pruning'] else optuna.pruners.NopPruner()
@@ -91,15 +155,15 @@ def optimize(opt_par_lims,default_config):
         storage='sqlite:///'+opt_config['db_path'],
         sampler=sampler,
         pruner=pruner,
-        study_name=args.study_name,
-        direction="minimize",
+        study_name=study_name,
+        direction=direction,
         load_if_exists=True
     ) #TODO: Add options for different SQL programs: Postgre, MySQL, etc.
 
     # Run optimization
     study.optimize(
         objective,
-        n_trials=args.ntrials,
-        timeout=args.timeout,
+        n_trials=n_trials,
+        timeout=timeout,
         gc_after_trial=True
     ) #NOTE: gc_after_trial=True is to avoid OOM errors see https://optuna.readthedocs.io/en/stable/faq.html#out-of-memory-gc-collect
