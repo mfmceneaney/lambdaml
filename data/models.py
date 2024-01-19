@@ -202,7 +202,6 @@ class ParticleDynamicEdgeConv(ParticleStaticEdgeConv):
         out = torch.add(aggrg, x)
         return self.act(out)
 
-
 class ParticleNet(torch.nn.Module):
 
     def __init__(
