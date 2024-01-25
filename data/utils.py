@@ -53,7 +53,7 @@ def train(model,dataloader,optimizer,criterion,epochs=100,scheduler=None,log_pat
             model,
             dataloader,
             criterion,
-            get_kins = False
+            get_kins = False #NOTE: This just does not set kins, even though a value will still be returned.  #TODO: Think about whether this is actually wise.
         )
 
         # Get binary classification metrics
@@ -66,14 +66,14 @@ def train(model,dataloader,optimizer,criterion,epochs=100,scheduler=None,log_pat
                 'precision':precision,
                 'recall':recall,
                 'roc_auc':roc_auc,
-                **optimizer.param_groups[0]['lr'], #NOTE: Check this...
+                **optimizer.param_groups[0]['lr'], #TODO: Check this...
             })
 
         # Step learning rate
         if scheduler is not None: scheduler.step()
 
 
-def test(model,dataloader,criterion,use_wandb=True):
+def test(model,dataloader,criterion,kin_names=None,kin_labels=None,use_wandb=True):
     """
     :param: config
     """
@@ -84,8 +84,9 @@ def test(model,dataloader,criterion,use_wandb=True):
         return_kins=True
     )
 
-    # Get binaray classification metrics
-    accuracy, precision, recall, precision_n, recall_n, roc_auc, plots = classification.get_binary_classification_metrics(preds,ys,return_plots=True)
+    # Get binary classification metrics
+    accuracy, precision, recall, precision_n, recall_n, roc_auc, plots = classification.get_binary_classification_metrics(outs,preds,ys,kins=kins,get_plots=True,kin_names=kin_names,kin_labels=kin_labels)
+    mass_fit_metrics = classification.get_lambda_mass_fit(preds,ys,kins=kins)#TODO: CHECK THAT ACTUALLY WANT THIS HERE
 
     # Log to wandb
     if use_wandb:
@@ -94,11 +95,12 @@ def test(model,dataloader,criterion,use_wandb=True):
             'precision':precision,
             'recall':recall,
             'roc_auc':roc_auc,
-            **plots
+            **plots,
+            **massfit_metrics,
         })
 
 
-def apply(config,use_wandb=True):
+def apply(config,kin_names=None,kin_labels=None,use_wandb=True):
     """
     :param: config
     """
@@ -106,6 +108,17 @@ def apply(config,use_wandb=True):
         model,
         dataloader,
     )
+
+    # Get binary classification metrics
+    metrics, plots = classification.get_binary_classification_metrics_no_labels(outs,preds,kins=kins,get_plots=True,kin_names=kin_names,kin_labels=kin_labels)
+
+    # Log to wandb
+    if use_wandb:
+        wandb.log({
+            **metrics,
+            **plots,
+            **massfit_metrics,
+        })
 
 def experiment(config,use_wanbd=True):
     """
@@ -141,15 +154,15 @@ def optimize(opt_par_lims,default_config,study_name="study",direction="minimize"
 
         trial_config = default_config.copy() #NOTE: COPY IS IMPORTANT HERE!
 
-        #TODO: Suggest trial params and substitute into trial_config
+        #TODO: Suggest trial params and substitute into trial_config also set log dir name with trial param of objective
 
         experiment_val = experiment(trial_config)
-        roc_auc = 
+        roc_auc = #TODO: Get roc_auc from experiment values
 
         return 1.0-roc_auc
 
     # Load or create pruner, sampler, and study
-    pruner = optuna.pruners.MedianPruner() if opt_config['pruning'] else optuna.pruners.NopPruner()
+    pruner = optuna.pruners.MedianPruner() if opt_config['pruning'] else optuna.pruners.NopPruner() #TODO: Add CLI options for other pruners
     sampler = TPESampler() #TODO: Add command line option for selecting different sampler types.
     study = optuna.create_study(
         storage='sqlite:///'+opt_config['db_path'],
