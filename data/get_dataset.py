@@ -56,6 +56,7 @@ def main(infiles,outdir,step,start=0,nolabels=False):
         for event_num, _ in enumerate(range(0,len(batch[list(batch.keys())[0]]))):
             
             # Check scattered electron and proton pion in REC::Particle #NOTE: Should prefilter events anyway but check just in case.
+            decay = [3122,[2212,-211]]
             filter_pids  = [2212,-211]
             rec_pid_idx  = 0
             no_filter_pids = True
