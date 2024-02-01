@@ -6,7 +6,7 @@ import os.path as osp
 from glob import glob
 
 import torch
-from torch_geometric.data import Dataset, InMemoryDataset download_url
+from torch_geometric.data import Dataset, InMemoryDataset, download_url
 
 class CustomInMemoryDataset(InMemoryDataset):
     """
