@@ -6,6 +6,7 @@ import argparse
 import hipopy.hipopy as hp
 import torch
 import torch_geometric as tg
+import tqdm
 
 # Local imports
 from data import CustomInMemoryDataset
