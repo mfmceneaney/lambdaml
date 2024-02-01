@@ -440,6 +440,6 @@ def get_edge_index_rec_traj(x):
     """
     
     link_indices = get_links_rec_traj(x)
-    edge_index = torch.tensor([[i,i+1 if i+1<torch.max(el_) else i] for el_ in link_indices for i in el_ for j in el_],dtype=torch.long)
+    edge_index = torch.tensor([[i,i+1 if i+1<max(el_) else i] for el_ in link_indices for i in el_ for j in el_],dtype=torch.long)
         
     return edge_index
