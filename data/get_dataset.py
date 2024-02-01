@@ -32,7 +32,7 @@ def main(infiles,outdir,step,start=0,nolabels=False):
         'REC::Kinematics',
         'MC::Lund',
     ]
-    if not nolabels: bank.append('MC::Lund')
+    if not nolabels: banks.append('MC::Lund')
 
     # Iterate hipo files
     datalist = []
