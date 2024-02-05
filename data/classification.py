@@ -2,6 +2,7 @@
 # Author: Matthew McEneaney, Duke University
 #----------------------------------------------------------------------#
 
+import torch
 from torch.nn.functional import softmax
 from sklearn.metrics import confusion_matrix, roc_auc_score, roc_curve
 import seaborn as sns
