@@ -49,7 +49,7 @@ class CustomDataset(Dataset):
 
     @property
     def processed_file_names(self):
-        return sorted(glob(osp.join(dataset.root,'processed/')+'data*.pt')) #TODO: Set these in __init__() How to get file names from directory?
+        return sorted(glob(osp.join(self.root,'processed/')+'data*.pt')) #TODO: Set these in __init__() How to get file names from directory?
 
     def len(self):
         return len(self.processed_file_names)
