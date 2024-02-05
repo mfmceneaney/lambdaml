@@ -170,7 +170,7 @@ def experiment(config,use_wandb=True):
     scheduler        = config['scheduler']
     epochs           = config['epochs']
     kin_names        = config['kin_names']
-    kin_labels       = config['config_labels']
+    kin_labels       = config['kin_labels']
 
     # Log experiment config
     if use_wandb: 
