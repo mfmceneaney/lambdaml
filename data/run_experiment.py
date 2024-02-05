@@ -16,7 +16,7 @@ from data import CustomDataset
 from models import GIN
 from utils import experiment
 
-def main(root_labelled="",root_unlabelled="",lengths_labelled=[0.8,0.1,0.1],lengths_unlabelled=None,batch_size=32,lr=1e-3,epochs=100,use_wandb=True):
+def main(root_labelled="",root_unlabelled="",lengths_labelled=[0.8,0.1,0.1],lengths_unlabelled=None,batch_size=32,lr=1e-3,epochs=100,use_wandb=True,num_workers=0):
     """
     :description: Create PyG dataset and save to file.  Graph data is taken from REC::Traj and preprocessed with processing.preprocess_rec_traj.
 
@@ -56,10 +56,10 @@ def main(root_labelled="",root_unlabelled="",lengths_labelled=[0.8,0.1,0.1],leng
     sl_labelled_val       = None
 
     # Create dataloaders
-    dl_labelled_train   = DataLoader(ds_labelled_train, sampler=sl_labelled_train, batch_size=batch_size, shuffle=False)
-    dl_labelled_val     = DataLoader(ds_labelled_val, sampler=sl_labelled_val, batch_size=batch_size, shuffle=False)
-    dl_labelled_test    = DataLoader(ds_labelled_test, batch_size=batch_size, shuffle=False)
-    dl_unlabelled_apply = DataLoader(ds_unlabelled, batch_size=batch_size, shuffle=False)
+    dl_labelled_train   = DataLoader(ds_labelled_train, sampler=sl_labelled_train, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    dl_labelled_val     = DataLoader(ds_labelled_val, sampler=sl_labelled_val, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    dl_labelled_test    = DataLoader(ds_labelled_test, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    dl_unlabelled_apply = DataLoader(ds_unlabelled, batch_size=batch_size, shuffle=False, num_workers=num_workers)
 
     # Create model #TODO: Could load args from yaml so easily configurable
     model_params = {
@@ -138,6 +138,8 @@ if __name__=="__main__":
                         help='Number of epochs for which to train')
     parser.add_argument('--use_wandb', action='store_true',
                         help='Log to WANDB')
+    parser.add_argument('--num_workers', type=int, default=0,
+                        help='Number of workers processes for dataloaders')
 
     # Parse
     args = parser.parse_args()
@@ -152,4 +154,5 @@ if __name__=="__main__":
             lr=args.learning_rate,
             epochs=args.epochs,
             use_wandb=args.use_wandb,
+            num_workers=args.num_workers,
         )
