@@ -120,15 +120,14 @@ class GIN(torch.nn.Module):
         self.convs = torch.nn.ModuleList()
         self.bns   = torch.nn.ModuleList()
         for idx in range(self.gnn_num_layers - 1):
-            mlp_layers = [self.gnn_mlp_hidden_dim for i in range(self.gnn_num_mlp_layers-2)]
-            mlp_layers.append(out_channels)
+            mlp_layers = [self.gnn_mlp_hidden_dim for i in range(self.gnn_num_mlp_layers-1)]
             if idx==0:
                 mlp_layers.insert(0,self.in_channels)
             else:
                 mlp_layers.insert(0,self.gnn_mlp_hidden_dim)
             mlp = MLP(mlp_layers, norm=self.gnn_mlp_norm, act=self.gnn_mlp_act)
             self.convs.append(GINConv(mlp, train_eps=self.train_epsilon))
-            self.bns.append(BatchNorm1d(hidden_dim))
+            self.bns.append(BatchNorm1d(self.gnn_mlp_hidden_dim))
 
         # Set MLP head layers, one mlp for each GNN layer
         self.mlps = torch.nn.ModuleList()
@@ -136,7 +135,7 @@ class GIN(torch.nn.Module):
             mlp_layers = [self.head_mlp_hidden_dim for i in range(self.head_num_mlp_layers-2)]
             mlp_layers.append(out_channels)
             if idx==0:
-                mlp_layers.insert(0,self.in_channels)
+                mlp_layers.insert(0,self.gnn_mlp_hidden_dim)
             else:
                 mlp_layers.insert(0,self.head_mlp_hidden_dim)
             self.mlps.append(MLP(mlp_layers,norm=self.head_norm, dropout=self.dropout, act=self.head_act))
