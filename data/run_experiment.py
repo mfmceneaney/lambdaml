@@ -101,6 +101,7 @@ def main(root_labelled="",root_unlabelled="",lengths_labelled=[0.8,0.1,0.1],leng
     # Create config
     config = {
         "model": model,
+        "device": device,
         "train_dataloader": dl_labelled_train,
         "val_dataloader": dl_labelled_val,
         "test_dataloader": dl_labelled_test,

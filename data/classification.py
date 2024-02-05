@@ -35,7 +35,7 @@ def train(
     for data in dataloader:
 
         # Copy data to device
-        data = data.to(model.device)
+        data = data.to(device)
 
         # Zero gradients
         optimizer.zero_grad()  # Clear gradients.
@@ -83,7 +83,7 @@ def test(
     for data in dataloader:
 
         # Copy data to model device
-        data = data.to(model.device)
+        data = data.to(device)
 
         # Apply model to data
         out = model(data.x, data.edge_index, data.batch)
@@ -132,7 +132,7 @@ def test_nolabels(
     for data in dataloader:
 
         # Copy data to model device
-        data = data.to(model.device)
+        data = data.to(device)
 
         # Apply model to data
         out = model(data.x, data.edge_index, data.batch)

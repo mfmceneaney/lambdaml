@@ -32,7 +32,7 @@ import data
 import models
 import classification
 
-def train(model=None,train_dataloader=None,val_dataloader=None,optimizer=None,criterion=None,scheduler=None,epochs=100,use_wandb=True):
+def train(model=None,device=None,train_dataloader=None,val_dataloader=None,optimizer=None,criterion=None,scheduler=None,epochs=100,use_wandb=True):
     """
     :param: model
     :param: train_dataloader
@@ -78,7 +78,7 @@ def train(model=None,train_dataloader=None,val_dataloader=None,optimizer=None,cr
         # Step learning rate
         if scheduler is not None: scheduler.step()
 
-def test(model=None,dataloader=None,criterion=None,kin_names=None,kin_labels=None,use_wandb=True):
+def test(model=None,device=None,dataloader=None,criterion=None,kin_names=None,kin_labels=None,use_wandb=True):
     """
     :param: model
     :param: dataloader
@@ -126,7 +126,7 @@ def test(model=None,dataloader=None,criterion=None,kin_names=None,kin_labels=Non
     }
 
 
-def apply(model=None,dataloader=None,kin_names=None,kin_labels=None,use_wandb=True):
+def apply(model=None,device=None,dataloader=None,kin_names=None,kin_labels=None,use_wandb=True):
     """
     :param: model
     :param: dataloader
@@ -161,6 +161,7 @@ def experiment(config,use_wandb=True):
 
     # Unpack config
     model            = config['model']
+    device           = config['device']
     train_dataloader = config['train_dataloader']
     val_dataloader   = config['val_dataloader']
     test_dataloader  = config['test_dataloader']
@@ -180,6 +181,7 @@ def experiment(config,use_wandb=True):
     # Run training validation and testing
     train_val = train(
         model=model,
+        device=device,
         train_dataloader=train_dataloader,
         val_dataloader=val_dataloader,
         optimizer=optimizer,
@@ -190,6 +192,7 @@ def experiment(config,use_wandb=True):
     )
     test_val  = test(
         model=model,
+        device=device,
         dataloader=test_dataloader,
         criterion=criterion,
         kin_names=kin_names,
@@ -198,6 +201,7 @@ def experiment(config,use_wandb=True):
     )
     apply_val = apply(
         model=model,
+        device=device,
         dataloader=apply_dataloader,
         kin_names=kin_names,
         kin_labels=kin_labels,
