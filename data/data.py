@@ -45,6 +45,10 @@ class CustomDataset(Dataset):
     """
 
     def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
+        self.length = 0 # Overall dataset length
+        self.lengths = [0] # List of cumulative data file lengths
+        self.current = 0 # Current data file index
+        self.current_ds = None # CustomInMemoryDataset object of current data file
         super().__init__(root, transform, pre_transform, pre_filter)
 
     @property
@@ -52,8 +56,31 @@ class CustomDataset(Dataset):
         return sorted(glob(osp.join(self.root,'processed/')+'data*.pt')) #TODO: Set these in __init__() How to get file names from directory?
 
     def len(self):
-        return len(self.processed_file_names)
+        # Loop through all dataset files loading as in memory datasets and add lengths
+        if self.length>0: return self.length
+        for pfn in self.processed_file_names:
+            data = torch.load(osp.join(self.processed_dir, pfn))
+            length = len(data[0]['y'])
+            self.length += length
+            self.lengths.append(self.length)
+        return self.length
 
-    def get(self, idx):
-        data = torch.load(osp.join(self.processed_dir, f'data{idx}.pt'))
-        return data
+    def get(self, idx): #NOTE THIS SHOULD GIVE YOU A SINGLE GRAPH!
+
+        nfiles = len(self)#NOTE: NEED TO ENSURE THIS IS CALLED BEFORE LOOPING!
+
+        # For quick looping since you're in the same data file or next data file most of the time do this
+        for i in range(len(self.processed_file_names)):
+            if idx>=self.lengths[self.current] and idx<self.lengths[self.current+1]:
+                if self.current_ds is None or self.current!=self.current_ds.idx:
+                    self.current_ds = CustomInMemoryDataset(
+                            self.root,
+                            transform=None,
+                            pre_transform=None,
+                            pre_filter=None,
+                            datalist=[],
+                            idx=self.current
+                        )
+                return self.current_ds[idx-self.lengths[self.current]]
+            else self.current = (self.current+1)%nfiles
+        raise IndexError
