@@ -129,20 +129,20 @@ class GIN(torch.nn.Module):
             self.convs.append(GINConv(mlp, train_eps=self.train_epsilon))
             self.bns.append(BatchNorm1d(self.gnn_mlp_hidden_dim))
 
-        # Set MLP head layers, one mlp for each GNN layer
+        # Set MLP head layers, one mlp for each GNN layer AND the original graph
         self.mlps = torch.nn.ModuleList()
         for idx in range(self.gnn_num_layers): #NOTE: INPUT DIM FOR MLP LAYER HAS TO MATCH INPUT DIM FOR EACH GRAPH REPRESENTATION IN EACH LAYER HERE
             mlp_layers = [self.head_mlp_hidden_dim for i in range(self.head_num_mlp_layers-2)]
             mlp_layers.append(out_channels)
             if idx==0:
-                mlp_layers.insert(0,self.gnn_mlp_hidden_dim)
+                mlp_layers.insert(0,self.in_channels)
             else:
-                mlp_layers.insert(0,self.head_mlp_hidden_dim)
+                mlp_layers.insert(0,self.gnn_mlp_hidden_dim)
             self.mlps.append(MLP(mlp_layers,norm=self.head_norm, dropout=self.dropout, act=self.head_act))
 
     def forward(self, x, edge_index, batch):
         hidden_rep = [x]
-        for i in range(self.num_layers - 1):
+        for i in range(self.gnn_num_layers - 1):
             x = self.convs[i](x, edge_index)
             x = self.bns[i](x)
             x = torch.nn.functional.relu(x)
