@@ -28,6 +28,7 @@ def main(root_labelled="",root_unlabelled="",lengths_labelled=[0.8,0.1,0.1],leng
     :param: lr
     :param: epochs
     :param: use_wandb
+    :param: num_workers
     """
 
     # Select device
@@ -86,7 +87,7 @@ def main(root_labelled="",root_unlabelled="",lengths_labelled=[0.8,0.1,0.1],leng
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
     # Create loss function with weights
-    data_labels    = ds_labelled.get(0)[0]['y']
+    data_labels    = ds_labelled.current_ds.y
     unique, counts = np.unique(data_labels,return_counts=True)
     weight_signal  = counts[1]/counts[0]
     weight         = torch.FloatTensor([weight_signal, 1.0]).to(device)
