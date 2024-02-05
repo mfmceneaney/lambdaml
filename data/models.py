@@ -94,7 +94,7 @@ class GIN(torch.nn.Module):
                     head_act = 'relu',
                     dropout = 0.5,
                     out_channels = 2,
-                    pool = 
+                    pool = 'max'
                 ):
         super().__init__()
 
