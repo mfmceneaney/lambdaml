@@ -58,16 +58,23 @@ class CustomDataset(Dataset):
     def len(self):
         # Loop through all dataset files loading as in memory datasets and add lengths
         if self.length>0: return self.length
-        for pfn in self.processed_file_names:
-            data = torch.load(osp.join(self.processed_dir, pfn))
-            length = len(data[0]['y'])
-            self.length += length
+        for idx, pfn in enumerate(self.processed_file_names):
+            current_ds = CustomInMemoryDataset(
+                            self.root,
+                            transform=None,
+                            pre_transform=None,
+                            pre_filter=None,
+                            datalist=[],
+                            idx=idx
+                        )
+            self.length += len(current_ds)
             self.lengths.append(self.length)
+            
         return self.length
 
     def get(self, idx): #NOTE THIS SHOULD GIVE YOU A SINGLE GRAPH!
 
-        nfiles = len(self)#NOTE: NEED TO ENSURE THIS IS CALLED BEFORE LOOPING!
+        nevents = len(self)#NOTE: NEED TO ENSURE THIS IS CALLED BEFORE LOOPING!
 
         # For quick looping since you're in the same data file or next data file most of the time do this
         for i in range(len(self.processed_file_names)):
@@ -82,5 +89,5 @@ class CustomDataset(Dataset):
                             idx=self.current
                         )
                 return self.current_ds[idx-self.lengths[self.current]]
-            else: self.current = (self.current+1)%nfiles
+            else: self.current = (self.current+1)%len(self.processed_file_names)
         raise IndexError
