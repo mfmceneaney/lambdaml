@@ -153,10 +153,9 @@ def apply(model=None,dataloader=None,kin_names=None,kin_labels=None,use_wandb=Tr
 
     return massfit_metrics
 
-def experiment(**config,use_wandb=True):
+def experiment(config):
     """
     :param: config
-    :param: use_wandb
     """
 
     # Unpack config
@@ -171,11 +170,12 @@ def experiment(**config,use_wandb=True):
     epochs           = config['epochs']
     kin_names        = config['kin_names']
     kin_labels       = config['config_labels']
+    use_wandb        = config['use_wandb']
 
     # Log experiment config
     if use_wandb: 
         wandb.init(**config)
-        wandb.watch(config["model"])
+        wandb.watch(model)
 
     # Run training validation and testing
     train_val = train(
@@ -209,7 +209,7 @@ def experiment(**config,use_wandb=True):
 
     return train_val, test_val, apply_val
 
-def optimize(opt_par_lims,default_config,study_name="study",direction="minimize",):
+def optimize(opt_par_lims,default_config,study_name='study',direction='minimize',):
     """
     :param: opt_config
     :param: opt_par_lims
@@ -222,7 +222,7 @@ def optimize(opt_par_lims,default_config,study_name="study",direction="minimize"
 
         #TODO: Suggest trial params and substitute into trial_config also set log dir name with trial param of objective
 
-        experiment_val = experiment(**trial_config)
+        experiment_val = experiment(trial_config)
         roc_auc = experiment_val[1]['roc_auc']#TODO: Get roc_auc from experiment values
 
         return 1.0-roc_auc
