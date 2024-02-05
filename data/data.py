@@ -27,6 +27,7 @@ class CustomInMemoryDataset(InMemoryDataset):
 
     def process(self):
         # Read data into huge `Data` list.
+        if self.datalist is None or len(self.datalist)==0: return
         data_list = self.datalist
 
         if self.pre_filter is not None:
