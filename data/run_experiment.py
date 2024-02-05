@@ -113,7 +113,7 @@ def main(root_labelled="",root_unlabelled="",lengths_labelled=[0.8,0.1,0.1],leng
     }
 
     # Run experiment
-    experiment(**config,use_wandb=use_wandb)
+    experiment(config,use_wandb=use_wandb)
 
 # Run script
 if __name__=="__main__":

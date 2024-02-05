@@ -153,9 +153,10 @@ def apply(model=None,dataloader=None,kin_names=None,kin_labels=None,use_wandb=Tr
 
     return massfit_metrics
 
-def experiment(config):
+def experiment(config,use_wandb=True):
     """
     :param: config
+    :param: use_wandb
     """
 
     # Unpack config
@@ -170,7 +171,6 @@ def experiment(config):
     epochs           = config['epochs']
     kin_names        = config['kin_names']
     kin_labels       = config['config_labels']
-    use_wandb        = config['use_wandb']
 
     # Log experiment config
     if use_wandb: 
