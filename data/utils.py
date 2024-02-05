@@ -35,6 +35,7 @@ import classification
 def train(model=None,device=None,train_dataloader=None,val_dataloader=None,optimizer=None,criterion=None,scheduler=None,epochs=100,use_wandb=True):
     """
     :param: model
+    :param: device
     :param: train_dataloader
     :param: val_dataloader
     :param: optimizer
@@ -49,6 +50,7 @@ def train(model=None,device=None,train_dataloader=None,val_dataloader=None,optim
         # Train model
         classification.train(
             model,
+            device,
             train_dataloader,
             optimizer,
             criterion
@@ -57,6 +59,7 @@ def train(model=None,device=None,train_dataloader=None,val_dataloader=None,optim
         # Validate model
         loss, outs, preds, ys, kins = classification.test(
             model,
+            device,
             val_dataloader,
             criterion,
             get_kins = False #NOTE: This just does not set kins, even though a value will still be returned.  #TODO: Think about whether this is actually wise.
@@ -81,6 +84,7 @@ def train(model=None,device=None,train_dataloader=None,val_dataloader=None,optim
 def test(model=None,device=None,dataloader=None,criterion=None,kin_names=None,kin_labels=None,use_wandb=True):
     """
     :param: model
+    :param: device
     :param: dataloader
     :param: criterion
     :param: kin_names
@@ -89,6 +93,7 @@ def test(model=None,device=None,dataloader=None,criterion=None,kin_names=None,ki
     """
     loss, outs, preds, ys, kins = classification.test(
         model,
+        device,
         dataloader,
         criterion,
         return_kins=True
@@ -129,6 +134,7 @@ def test(model=None,device=None,dataloader=None,criterion=None,kin_names=None,ki
 def apply(model=None,device=None,dataloader=None,kin_names=None,kin_labels=None,use_wandb=True):
     """
     :param: model
+    :param: device
     :param: dataloader
     :param: kin_names
     :param: kin_labels
@@ -136,6 +142,7 @@ def apply(model=None,device=None,dataloader=None,kin_names=None,kin_labels=None,
     """
     loss, outs, preds, kins = classification.test_nolabels(
         model,
+        device,
         dataloader,
     )
 

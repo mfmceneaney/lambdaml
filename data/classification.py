@@ -15,6 +15,7 @@ import scipy.integrate as integrate#TODO: ORGANIZE IMPORTS
 # Define training and testing routines
 def train(
             model,
+            device,
             dataloader,
             optimizer,
             criterion
@@ -23,6 +24,7 @@ def train(
     :description: Train a model for one epoch on a dataset.
 
     :param: model
+    :param: device
     :param: dataloader
     :param: optimizer
     :param: criterion
@@ -54,6 +56,7 @@ def train(
 @torch.no_grad()
 def test(
             model,
+            device,
             dataloader,
             criterion,
             get_kins = False
@@ -62,6 +65,7 @@ def test(
     :description: Evaluate a classification model on a dataset and return total loss, output probabilities, label predictions, and ground truth labels and optionally kinematics.
 
     :param: model
+    :param: device
     :param: dataloader
     :param: criterion
     :param: get_kins
@@ -107,6 +111,7 @@ def test(
 @torch.no_grad()
 def test_nolabels(
             model,
+            device,
             dataloader,
             get_kins = True
         ):
@@ -114,6 +119,7 @@ def test_nolabels(
     :description: Evaluate a classification model on a dataset and return output probabilities, label predictions, and kinematics.
 
     :param: model
+    :param: device
     :param: dataloader
     :param: get_kins
 
