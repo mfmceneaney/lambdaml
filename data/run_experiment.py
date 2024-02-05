@@ -85,7 +85,7 @@ def main(root_labelled="",root_unlabelled="",lengths_labelled=[0.8,0.1,0.1],leng
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
     # Create loss function and add weights
-    data_labels    = train_dataset.y
+    data_labels    = ds_labelled_train.y
     unique, counts = np.unique(data_labels,return_counts=True)
     weight_signal  = counts[1]/counts[0]
     weight         = torch.FloatTensor([weight_signal, 1.0]).to(device)
