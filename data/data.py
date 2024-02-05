@@ -82,5 +82,5 @@ class CustomDataset(Dataset):
                             idx=self.current
                         )
                 return self.current_ds[idx-self.lengths[self.current]]
-            else self.current = (self.current+1)%nfiles
+            else: self.current = (self.current+1)%nfiles
         raise IndexError
