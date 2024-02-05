@@ -32,18 +32,24 @@ import data
 import models
 import classification
 
-def train(model,dataloader,optimizer,criterion,epochs=100,scheduler=None,log_path="",use_wandb=True):
+def train(model=None,train_dataloader=None,val_dataloader=None,optimizer=None,criterion=None,scheduler=None,epochs=100,use_wandb=True):
     """
-    :param: config
+    :param: model
+    :param: train_dataloader
+    :param: val_dataloader
+    :param: optimizer
+    :param: criterion
+    :param: scheduler
+    :param: epochs
+    :param: use_wandb
     """
 
-    logs = []
     for epoch in tqdm(range(epochs)):
 
         # Train model
         classification.train(
             model,
-            dataloader,
+            train_dataloader,
             optimizer,
             criterion
         )
@@ -51,7 +57,7 @@ def train(model,dataloader,optimizer,criterion,epochs=100,scheduler=None,log_pat
         # Validate model
         loss, outs, preds, ys, kins = classification.test(
             model,
-            dataloader,
+            val_dataloader,
             criterion,
             get_kins = False #NOTE: This just does not set kins, even though a value will still be returned.  #TODO: Think about whether this is actually wise.
         )
@@ -72,10 +78,14 @@ def train(model,dataloader,optimizer,criterion,epochs=100,scheduler=None,log_pat
         # Step learning rate
         if scheduler is not None: scheduler.step()
 
-
-def test(model,dataloader,criterion,kin_names=None,kin_labels=None,use_wandb=True):
+def test(model=None,dataloader=None,criterion=None,kin_names=None,kin_labels=None,use_wandb=True):
     """
-    :param: config
+    :param: model
+    :param: dataloader
+    :param: criterion
+    :param: kin_names
+    :param: kin_labels
+    :param: use_wandb
     """
     loss, outs, preds, ys, kins = classification.test(
         model,
@@ -85,8 +95,16 @@ def test(model,dataloader,criterion,kin_names=None,kin_labels=None,use_wandb=Tru
     )
 
     # Get binary classification metrics
-    accuracy, precision, recall, precision_n, recall_n, roc_auc, plots = classification.get_binary_classification_metrics(outs,preds,ys,kins=kins,get_plots=True,kin_names=kin_names,kin_labels=kin_labels)
-    mass_fit_metrics = classification.get_lambda_mass_fit(preds,ys,kins=kins)#TODO: CHECK THAT ACTUALLY WANT THIS HERE
+    accuracy, precision, recall, precision_n, recall_n, roc_auc, plots = classification.get_binary_classification_metrics(
+                                                                                outs,
+                                                                                preds,
+                                                                                ys,
+                                                                                kins=kins,
+                                                                                get_plots=True,
+                                                                                kin_names=kin_names,
+                                                                                kin_labels=kin_labels
+                                                                            )
+    mass_fit_metrics = classification.get_lambda_mass_fit(preds,true_labels=ys)#TODO: CHECK THAT ACTUALLY WANT THIS HERE
 
     # Log to wandb
     if use_wandb:
@@ -99,10 +117,22 @@ def test(model,dataloader,criterion,kin_names=None,kin_labels=None,use_wandb=Tru
             **massfit_metrics,
         })
 
+    return {
+        'accuracy': accuracy,
+        'precision': precision,
+        'recall': recall,
+        'roc_auc': roc_auc,
+        **massfit_metrics
+    }
 
-def apply(config,kin_names=None,kin_labels=None,use_wandb=True):
+
+def apply(model=None,dataloader=None,kin_names=None,kin_labels=None,use_wandb=True):
     """
-    :param: config
+    :param: model
+    :param: dataloader
+    :param: kin_names
+    :param: kin_labels
+    :param: use_wandb
     """
     loss, outs, preds, kins = classification.test_nolabels(
         model,
@@ -110,7 +140,8 @@ def apply(config,kin_names=None,kin_labels=None,use_wandb=True):
     )
 
     # Get binary classification metrics
-    metrics, plots = classification.get_binary_classification_metrics_no_labels(outs,preds,kins=kins,get_plots=True,kin_names=kin_names,kin_labels=kin_labels)
+    metrics, plots = classification.get_binary_classification_metrics_nolabels(outs,preds,kins=kins,get_plots=True,kin_names=kin_names,kin_labels=kin_labels)
+    mass_fit_metrics = classification.get_lambda_mass_fit(preds,true_labels=None)#TODO: CHECK THAT ACTUALLY WANT THIS HERE
 
     # Log to wandb
     if use_wandb:
@@ -120,26 +151,61 @@ def apply(config,kin_names=None,kin_labels=None,use_wandb=True):
             **massfit_metrics,
         })
 
-def experiment(config,use_wanbd=True):
+    return massfit_metrics
+
+def experiment(**config,use_wandb=True):
     """
     :param: config
+    :param: use_wandb
     """
 
     # Unpack config
-    model = config['model']
+    model            = config['model']
+    train_dataloader = config['train_dataloader']
+    val_dataloader   = config['val_dataloader']
+    test_dataloader  = config['test_dataloader']
+    apply_dataloader = config['apply_dataloader']
+    optimizer        = config['optimizer']
+    criterion        = config['criterion']
+    scheduler        = config['scheduler']
+    epochs           = config['epochs']
+    kin_names        = config['kin_names']
+    kin_labels       = config['config_labels']
 
     # Log experiment config
-    if use_wanbd:
+    if use_wandb: 
         wandb.init(**config)
-        wandb.watch(model)
+        wandb.watch(config["model"])
 
     # Run training validation and testing
-    train_val = train(config,use_wandb=use_wandb)
-    test_val  = test(config,use_wandb=use_wandb)
-    apply_val = apply(config,use_wandb=use_wandb)
+    train_val = train(
+        model=model,
+        train_dataloader=train_dataloader,
+        val_dataloader=val_dataloader,
+        optimizer=optimizer,
+        criterion=criterion,
+        scheduler=scheduler,
+        epochs=epochs,
+        use_wandb=use_wandb
+    )
+    test_val  = test(
+        model=model,
+        dataloader=test_dataloader,
+        criterion=criterion,
+        kin_names=kin_names,
+        kin_labels=kin_labels,
+        use_wandb=use_wandb
+    )
+    apply_val = apply(
+        model=model,
+        dataloader=apply_dataloader,
+        kin_names=kin_names,
+        kin_labels=kin_labels,
+        use_wandb=use_wandb
+    )
 
     # Finish experiment
-    if use_wanbd: wandb.finish()
+    if use_wandb: wandb.finish()
 
     return train_val, test_val, apply_val
 
@@ -156,8 +222,8 @@ def optimize(opt_par_lims,default_config,study_name="study",direction="minimize"
 
         #TODO: Suggest trial params and substitute into trial_config also set log dir name with trial param of objective
 
-        experiment_val = experiment(trial_config)
-        roc_auc = #TODO: Get roc_auc from experiment values
+        experiment_val = experiment(**trial_config)
+        roc_auc = experiment_val[1]['roc_auc']#TODO: Get roc_auc from experiment values
 
         return 1.0-roc_auc
 
