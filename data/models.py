@@ -2,6 +2,8 @@
 # Author: Matthew McEneaney, Duke University
 #----------------------------------------------------------------------#
 
+import torch
+import torch_geometric
 from torch.nn import Linear, BatchNorm1d
 import torch.nn.functional as F
 from torch_geometric.nn import MLP, GCNConv, GINConv, GraphConv, global_add_pool, global_mean_pool,  global_max_pool
