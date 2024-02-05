@@ -13,7 +13,7 @@ class CustomInMemoryDataset(InMemoryDataset):
     :class: CustomInMemoryDataset
     """
 
-    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None, datalist=[], idx=0):
+    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None, datalist=[], idx=0, processed_file_name=None):
         self.datalist = datalist
         self.idx = idx #NOTE: This is index of batch for writing larger datasets
         super().__init__(root, transform, pre_transform, pre_filter)
@@ -23,7 +23,7 @@ class CustomInMemoryDataset(InMemoryDataset):
 
     @property
     def processed_file_names(self):
-        return [f'data{self.idx}.pt']
+        return [f'data{self.idx}.pt'] if self.processed_file_name is None else [self.processed_file_name]
 
     def process(self):
         # Read data into huge `Data` list.
@@ -59,10 +59,17 @@ class CustomDataset(Dataset):
     def len(self):
         # Loop through all dataset files loading as in memory datasets and add lengths
         if self.length>0: return self.length
-        for pfn in self.processed_file_names:
-            data = torch.load(osp.join(self.processed_dir, pfn))
-            length = len(data[0]['y'])
-            self.length += length
+        for idx, pfn in enumerate(self.processed_file_names):
+            current_ds = CustomInMemoryDataset(
+                            self.root,
+                            transform=None,
+                            pre_transform=None,
+                            pre_filter=None,
+                            datalist=[],
+                            idx=0,
+                            processed_file_name=osp.basename(pfn),
+                        )
+            self.length += len(current_ds)
             self.lengths.append(self.length)
         return self.length
 
@@ -71,7 +78,7 @@ class CustomDataset(Dataset):
         nevents = len(self)#NOTE: NEED TO ENSURE THIS IS CALLED BEFORE LOOPING!
 
         # For quick looping since you're in the same data file or next data file most of the time do this
-        for i in range(len(self.processed_file_names)):
+        for i, pfn in enumerate(self.processed_file_names):
             if idx>=self.lengths[self.current] and idx<self.lengths[self.current+1]:
                 if self.current_ds is None or self.current!=self.current_ds.idx:
                     self.current_ds = CustomInMemoryDataset(
@@ -80,7 +87,8 @@ class CustomDataset(Dataset):
                             pre_transform=None,
                             pre_filter=None,
                             datalist=[],
-                            idx=self.current
+                            idx=0,
+                            processed_file_name=osp.basename(pfn),
                         )
                 return self.current_ds[idx-self.lengths[self.current]]
             else: self.current = (self.current+1)%len(self.processed_file_names)
