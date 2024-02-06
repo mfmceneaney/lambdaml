@@ -306,10 +306,10 @@ def get_binary_classification_metrics(
         plots['confusion_matrix_plot'] = confusion_matrix_plot
 
         # Separate outputs of model
-        outs_sg_true  = outs[:,1][np.logical_and(preds==1,ys==1)]
-        outs_sg_false = outs[:,1][np.logical_and(preds==1,ys==0)]
-        outs_bg_false  = outs[:,1][np.logical_and(preds==0,ys==1)]
-        outs_bg_true   = outs[:,1][np.logical_and(preds==0,ys==0)]
+        outs_sg_true  = outs[:,1][torch.logical_and(preds==1,ys==1)]
+        outs_sg_false = outs[:,1][torch.logical_and(preds==1,ys==0)]
+        outs_bg_false  = outs[:,1][torch.logical_and(preds==0,ys==1)]
+        outs_bg_true   = outs[:,1][torch.logical_and(preds==0,ys==0)]
 
         # Plot separated output distributions
         outs_sg, outs_sg_and_bg = plot_data_separated(
