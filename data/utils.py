@@ -66,7 +66,7 @@ def train(model=None,device=None,train_dataloader=None,val_dataloader=None,optim
         )
 
         # Get binary classification metrics
-        accuracy, precision, recall, precision_n, recall_n, roc_auc, plots = classification.get_binary_classification_metrics(outs,preds,ys,kins=None,get_plots=False)
+        accuracy, precision, recall, precision_n, recall_n, roc_auc, roc_c, plots = classification.get_binary_classification_metrics(outs,preds,ys,kins=None,get_plots=False)
 
         # Log to wandb
         if use_wandb:
