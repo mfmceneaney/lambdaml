@@ -89,7 +89,7 @@ class CustomDataset(Dataset):
     @property
     def processed_file_names(self):
         pfns = sorted(glob(osp.join(self.root,'processed/')+'data*.pt'))
-        return pfns if self.max_files<=0 else pfns[:max_files]
+        return pfns if self.max_files<=0 else pfns[:self.max_files]
 
     def len(self):
         # Loop through all dataset files loading as in memory datasets and add lengths
