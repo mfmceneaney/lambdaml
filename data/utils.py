@@ -100,7 +100,7 @@ def test(model=None,device=None,dataloader=None,criterion=None,kin_names=None,ki
     )
 
     # Get binary classification metrics
-    accuracy, precision, recall, precision_n, recall_n, roc_auc, plots = classification.get_binary_classification_metrics(
+    accuracy, precision, recall, precision_n, recall_n, roc_auc, roc_c, plots = classification.get_binary_classification_metrics(
                                                                                 outs,
                                                                                 preds,
                                                                                 ys,
