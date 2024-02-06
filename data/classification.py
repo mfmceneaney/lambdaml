@@ -334,17 +334,18 @@ def get_binary_classification_metrics(
             # Create awkward array since kinematics will not be same length for every event
             kins = ak.Array(kins)
 
+            # Get truth-matched and flattened kinematics arrays
+            kins_sg_true  = ak.flatten(kins[np.logical_and(preds.numpy()==1,ys.numpy()==1)],axis=1) #NOTE: Make sure single match entries for kinematics are wrapped in extra 1D layer!
+            kins_sg_false = ak.flatten(kins[np.logical_and(preds.numpy()==1,ys.numpy()==0)],axis=1)
+            kins_bg_false = ak.flatten(kins[np.logical_and(preds.numpy()==0,ys.numpy()==1)],axis=1)
+            kins_bg_true  = ak.flatten(kins[np.logical_and(preds.numpy()==0,ys.numpy()==0)],axis=1)
+            kins          = ak.flatten(kins,axis=1)
+
             # Check dimensions
             if kin_labels is None or len(kin_labels)!=len(kins[0]):
                 raise ValueError("`kin_labels` must be set and have the same length as the 2nd dimension of `kins`.")
             if kin_names is None or len(kin_names)!=len(kins[0]):
                 raise ValueError("`kin_names` must be set and have the same length as the 2nd dimension of `kins`.")
-
-            # Get truth-matched and flattened kinematics arrays
-            kins_sg_true  = kins[np.logical_and(preds.numpy()==1,ys.numpy()==1)].flatten()
-            kins_sg_false = kins[np.logical_and(preds.numpy()==1,ys.numpy()==0)].flatten()
-            kins_bg_false = kins[np.logical_and(preds.numpy()==0,ys.numpy()==1)].flatten()
-            kins_bg_true  = kins[np.logical_and(preds.numpy()==0,ys.numpy()==0)].flatten()
 
             # Loop kinematics
             for idx in range(len(kins[0])):
@@ -431,6 +432,11 @@ def get_binary_classification_metrics_nolabels(
             # Create awkward array so you can easily flatten later
             kins = ak.Array(kins)
 
+            # Get truth-matched and flattened kinematics arrays
+            kins_sg = ak.flatten(kins[preds.numpy()==1],axis=1) #NOTE: Make sure single match entries for kinematics are wrapped in extra 1D layer!
+            kins_bg = ak.flatten(kins[preds.numpy()==0],axis=1)
+            kins    = ak.flatten(kins,axis=1)
+
             # Check dimensions
             if kin_labels is None or len(kin_labels)!=len(kins[0]):
                 raise ValueError("`kin_labels` must be set and have the same length as the 2nd dimension of `kins`.")
@@ -439,13 +445,10 @@ def get_binary_classification_metrics_nolabels(
 
             # Loop kinematics
             for idx in range(len(kins[0])):
-                kin = kins[:,idx]
+                kin_sg = kins_sg[:,idx]
+                kin_bg = kins_bg[:,idx]
                 kin_label = kin_labels[idx]
                 kin_name  = kin_names[idx]
-
-                # Get truth-matched and flattened kinematics arrays
-                kin_sg_true  = kin[preds==1].flatten()
-                kin_sg_false = kin[preds==0].flatten()
 
                 # Plot separated kinematic distributions
                 kin_sg = plot_data_sg_bg(
