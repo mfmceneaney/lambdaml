@@ -16,6 +16,7 @@ class CustomInMemoryDataset(InMemoryDataset):
     def __init__(self, root, transform=None, pre_transform=None, pre_filter=None, datalist=[], idx=0, processed_file_name=None):
         self.datalist = datalist
         self.idx = idx #NOTE: This is index of batch for writing larger datasets
+        self.processed_file_name = processed_file_name
         super().__init__(root, transform, pre_transform, pre_filter)
         self.load(self.processed_paths[0])
         # For PyG<2.4:
@@ -59,14 +60,14 @@ class CustomDataset(Dataset):
     def len(self):
         # Loop through all dataset files loading as in memory datasets and add lengths
         if self.length>0: return self.length
-        for idx, pfn in enumerate(self.processed_file_names):
+        for idx_pfn, pfn in enumerate(self.processed_file_names):
             current_ds = CustomInMemoryDataset(
                             self.root,
                             transform=None,
                             pre_transform=None,
                             pre_filter=None,
                             datalist=[],
-                            idx=0,
+                            idx=idx_pfn,
                             processed_file_name=osp.basename(pfn),
                         )
             self.length += len(current_ds)
@@ -78,7 +79,7 @@ class CustomDataset(Dataset):
         nevents = len(self)#NOTE: NEED TO ENSURE THIS IS CALLED BEFORE LOOPING!
 
         # For quick looping since you're in the same data file or next data file most of the time do this
-        for i, pfn in enumerate(self.processed_file_names):
+        for _ in self.processed_file_names:
             if idx>=self.lengths[self.current] and idx<self.lengths[self.current+1]:
                 if self.current_ds is None or self.current!=self.current_ds.idx:
                     self.current_ds = CustomInMemoryDataset(
@@ -87,8 +88,8 @@ class CustomDataset(Dataset):
                             pre_transform=None,
                             pre_filter=None,
                             datalist=[],
-                            idx=0,
-                            processed_file_name=osp.basename(pfn),
+                            idx=self.current,
+                            processed_file_name=osp.basename(self.processed_file_names[self.current]),
                         )
                 return self.current_ds[idx-self.lengths[self.current]]
             else: self.current = (self.current+1)%len(self.processed_file_names)
