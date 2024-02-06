@@ -90,6 +90,8 @@ def test(model=None,device=None,dataloader=None,criterion=None,kin_names=None,ki
     :param: kin_names
     :param: kin_labels
     :param: use_wandb
+
+    :return: metrics
     """
     loss, outs, preds, ys, kins = classification.test(
         model,
@@ -139,6 +141,8 @@ def apply(model=None,device=None,dataloader=None,kin_names=None,kin_labels=None,
     :param: kin_names
     :param: kin_labels
     :param: use_wandb
+
+    :return: massfit_metrics
     """
     loss, outs, preds, kins = classification.test_nolabels(
         model,
@@ -164,6 +168,8 @@ def experiment(config,use_wandb=True):
     """
     :param: config
     :param: use_wandb
+
+    :return: test_val, apply_val
     """
 
     # Unpack config
@@ -186,7 +192,7 @@ def experiment(config,use_wandb=True):
         wandb.watch(model)
 
     # Run training validation and testing
-    train_val = train(
+    train(
         model=model,
         device=device,
         train_dataloader=train_dataloader,
@@ -218,7 +224,7 @@ def experiment(config,use_wandb=True):
     # Finish experiment
     if use_wandb: wandb.finish()
 
-    return train_val, test_val, apply_val
+    return test_val, apply_val
 
 def optimize(opt_par_lims,default_config,study_name='study',direction='minimize',):
     """
