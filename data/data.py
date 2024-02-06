@@ -4,7 +4,7 @@
 
 import os.path as osp
 from glob import glob
-from math import is_close
+from math import isclose
 
 from torch.data.utils import Subset
 from torch_geometric.data import Dataset, InMemoryDataset, download_url
