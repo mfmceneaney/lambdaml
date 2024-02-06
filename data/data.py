@@ -4,9 +4,41 @@
 
 import os.path as osp
 from glob import glob
+from math import is_close
 
-import torch
+from torch.data.utils import Subset
 from torch_geometric.data import Dataset, InMemoryDataset, download_url
+
+def static_split(dataset,lengths):
+
+    """
+    :param: dataset
+    :param: lengths
+
+    :return subsets
+    """
+
+    if len(lengths)>3 or len(lengths)<2:
+        raise ValueError("len(lengths) must be in (2,3)")
+    if not is_close(sum(lengths),1) or sum(lengths)>1:
+        raise ValueError("lengths must sum to 1.0")
+
+    cum_fracs = [sum(lengths[:idx]) for idx in range(1,len(lengths)+1)]
+
+    subsets = None
+    if len(lengths)==3:
+        split1, split2 = [int(len(dataset)*frac) for frac in cum_fracs[:-1]]
+        train_dataset = Subset(dataset,[i for i in range(0,split1)]) #NOTE: Probably need subsets here to avoid loading entire datasets...
+        val_dataset = Subset(dataset,[i for i in range(split1,split2)])
+        test_dataset = Subset(dataset,[i for i in range(split2,len(dataset))])
+        subsets train_dataset, val_dataset, test_dataset
+    else:
+        split = cum_fracs[0]
+        train_dataset = Subset(dataset,[i for i in range(0,split1)]) #NOTE: Probably need subsets here to avoid loading entire datasets...
+        test_dataset = Subset(dataset,[i for i in range(split1,len(dataset))])
+        subsets = train_dataset, test_dataset
+
+    return subsets
 
 class CustomInMemoryDataset(InMemoryDataset):
     """
