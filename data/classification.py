@@ -318,8 +318,8 @@ def get_binary_classification_metrics(
 
         # Plot separated output distributions
         outs_sg, outs_sg_and_bg = plot_data_separated(
-            outs_sig_true,
-            outs_sig_false,
+            outs_sg_true,
+            outs_sg_false,
             outs_bg_false,
             outs_bg_true,
             title='Separated output distributions',
