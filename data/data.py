@@ -31,7 +31,7 @@ def static_split(dataset,lengths):
         train_dataset = Subset(dataset,[i for i in range(0,split1)]) #NOTE: Probably need subsets here to avoid loading entire datasets...
         val_dataset = Subset(dataset,[i for i in range(split1,split2)])
         test_dataset = Subset(dataset,[i for i in range(split2,len(dataset))])
-        subsets train_dataset, val_dataset, test_dataset
+        subsets = train_dataset, val_dataset, test_dataset
     else:
         split = cum_fracs[0]
         train_dataset = Subset(dataset,[i for i in range(0,split1)]) #NOTE: Probably need subsets here to avoid loading entire datasets...
