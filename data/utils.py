@@ -111,7 +111,7 @@ def test(model=None,device=None,dataloader=None,criterion=None,kin_names=None,ki
                                                                                 kin_names=kin_names,
                                                                                 kin_labels=kin_labels
                                                                             )
-    mass_fit_metrics = classification.get_lambda_mass_fit(preds,true_labels=ys)#TODO: CHECK THAT ACTUALLY WANT THIS HERE
+    mass_fit_metrics = classification.get_lambda_mass_fit(kins,true_labels=ys,mass_index=-1)#TODO: CHECK THAT ACTUALLY WANT THIS HERE
 
     # Log to wandb
     if use_wandb:
@@ -152,7 +152,7 @@ def apply(model=None,device=None,dataloader=None,kin_names=None,kin_labels=None,
 
     # Get binary classification metrics
     metrics, plots = classification.get_binary_classification_metrics_nolabels(outs,preds,kins=kins,get_plots=True,kin_names=kin_names,kin_labels=kin_labels)
-    mass_fit_metrics = classification.get_lambda_mass_fit(preds,true_labels=None)#TODO: CHECK THAT ACTUALLY WANT THIS HERE
+    mass_fit_metrics = classification.get_lambda_mass_fit(kins,true_labels=None,mass_index=-1)#TODO: CHECK THAT ACTUALLY WANT THIS HERE
 
     # Log to wandb
     if use_wandb:

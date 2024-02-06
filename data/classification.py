@@ -473,7 +473,7 @@ def get_lambda_mass_fit(
         sg_max=1.13,
         nbins=100,
         low_high=(1.08,1.24),
-
+        mass_index=-1,
     ):
     """
     :description: Fit $\Lambda$ hyperon mass spectrum from CLAS12 data and return dictionary of fit output metrics.
@@ -484,6 +484,7 @@ def get_lambda_mass_fit(
     :param: sg_max
     :param: nbins
     :param: low_high
+    :param: mass_index
 
     :return: metrics
     """
@@ -501,7 +502,8 @@ def get_lambda_mass_fit(
     # Create histogram
     f = plt.figure(figsize=(16,10))
     plt.title('Separated mass distribution')
-    hdata = plt.hist(kins, color='tab:blue', alpha=0.5, range=low_high, bins=bins, histtype='stepfilled', density=False, label='signal')
+    masses = ak.flatten(ak.Array(kins),axis=1)[:,mass_index]
+    hdata = plt.hist(masses, color='tab:blue', alpha=0.5, range=low_high, bins=bins, histtype='stepfilled', density=False, label='signal')
 
     # Fit histogram
     N, beta, m, loc, scale, A, B, C = 5, 1, 1.112, 1.115, 0.008, hdata[0][-1], 37, 1.24
