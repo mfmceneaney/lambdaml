@@ -96,7 +96,7 @@ def test(model=None,device=None,dataloader=None,criterion=None,kin_names=None,ki
         device,
         dataloader,
         criterion,
-        return_kins=True
+        get_kins=True
     )
 
     # Get binary classification metrics
