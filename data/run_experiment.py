@@ -99,8 +99,8 @@ def main(root_labelled="",root_unlabelled="",lengths_labelled=[0.8,0.1,0.1],leng
 
     # Set miscellaneous parameters
     scheduler  = None
-    kin_names  = ["Q2","W","x","y","z_ppim","xF_ppim","mass_ppim"]
-    kin_labels = ["$Q^2$ (GeV$^2$)","$W$ (GeV)","$x$","$y$","$z_{p\pi^{-}}","$x_{F p\pi^{-}}","$M_{p\pi^{-}}$ (GeV)"]
+    kin_names  = ["idxe","idxp","idxpi","Q2","nu","W","x","y","z_ppim","xF_ppim","mass_ppim"]
+    kin_labels = ["idxe","idxp","idxpi","$Q^2$ (GeV$^2$)","$\\nu$","$W$ (GeV)","$x$","$y$","$z_{p\pi^{-}}","$x_{F p\pi^{-}}","$M_{p\pi^{-}}$ (GeV)"]
 
     # Create config
     config = {
