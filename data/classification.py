@@ -104,7 +104,7 @@ def test(
         outs.extend(out.cpu())
         preds.extend(pred.cpu())
         ys.extend(data.y.cpu())
-        if get_kins: kins.extend(data.kin.cpu())
+        if get_kins: kins.extend(data.kinematics.cpu())
 
     return loss, outs, preds, ys, kins
 
@@ -150,7 +150,7 @@ def test_nolabels(
         # Add evaluation data to overall lists
         outs.extend(out.cpu())
         preds.extend(pred.cpu())
-        if get_kins: kins.extend(data.kin.cpu())
+        if get_kins: kins.extend(data.kinematics.cpu())
 
     return outs, preds, kins
 
