@@ -101,10 +101,10 @@ def test(
         pred = out.argmax(dim=1)
         
         # Add evaluation data to overall lists
-        outs.extend(out.cpu())
-        preds.extend(pred.cpu())
-        ys.extend(data.y.cpu())
-        if get_kins: kins.extend(data.kinematics.cpu())
+        outs = out.cpu() if len(outs)==0 else torch.cat((outs,out.cpu()),axis=0)
+        preds = pred.cpu() if len(preds)==0 else torch.cat((preds,pred.cpu()),axis=0)
+        ys = data.y.cpu() if len(ys)==0 else torch.cat((ys,data.y.cpu()),axis=0)
+        if get_kins: kins = data.kinematics.cpu() if len(kins)==0 else torch.cat((kins,data.kinematics.cpu()),axis=0)
 
     return loss, outs, preds, ys, kins
 
@@ -148,9 +148,9 @@ def test_nolabels(
         pred = out.argmax(dim=1)
         
         # Add evaluation data to overall lists
-        outs.extend(out.cpu())
-        preds.extend(pred.cpu())
-        if get_kins: kins.extend(data.kinematics.cpu())
+        outs = out.cpu() if len(outs)==0 else torch.cat((outs,out.cpu()),axis=0)
+        preds = pred.cpu() if len(preds)==0 else torch.cat((preds,pred.cpu()),axis=0)
+        if get_kins: kins = data.kinematics.cpu() if len(kins)==0 else torch.cat((kins,data.kinematics.cpu()),axis=0)
 
     return outs, preds, kins
 
