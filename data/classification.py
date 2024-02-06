@@ -262,6 +262,7 @@ def get_binary_classification_metrics(
                                         ys,
                                         kins = None,
                                         get_plots = False,
+                                        kin_names = None,
                                         kin_labels = None,
                                     ):
     """
@@ -340,7 +341,9 @@ def get_binary_classification_metrics(
 
             # Check dimensions
             if kin_labels is None or len(kin_labels)!=len(kins[0]):
-                raise TypeError("`kin_labels` must be set and have the same length as the 2nd dimension of `kins`.")
+                raise ValueError("`kin_labels` must be set and have the same length as the 2nd dimension of `kins`.")
+            if kin_names is None or len(kin_names)!=len(kins[0]):
+                raise ValueError("`kin_names` must be set and have the same length as the 2nd dimension of `kins`.")
 
             # Loop kinematics
             for idx in range(len(kins[0])):
@@ -432,7 +435,9 @@ def get_binary_classification_metrics_nolabels(
 
             # Check dimensions
             if kin_labels is None or len(kin_labels)!=len(kins[0]):
-                raise TypeError("`kin_labels` must be set and have the same length as the 2nd dimension of `kins`.")
+                raise ValueError("`kin_labels` must be set and have the same length as the 2nd dimension of `kins`.")
+            if kin_names is None or len(kin_names)!=len(kins[0]):
+                raise TypeError("`kin_names` must be set and have the same length as the 2nd dimension of `kins`.")
 
             # Loop kinematics
             for idx in range(len(kins[0])):
