@@ -8,6 +8,7 @@ from sklearn.metrics import confusion_matrix, roc_auc_score, roc_curve
 import seaborn as sns
 import numpy as np
 import awkward as ak
+import matplotlib.pyplot as plt
 import scipy.optimize as opt
 from scipy.stats import crystalball
 import scipy.integrate as integrate#TODO: ORGANIZE IMPORTS
