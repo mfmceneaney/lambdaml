@@ -74,6 +74,7 @@ def main(infiles,outdir,step,start=0,nolabels=False):
             
             # Get REC::Kinematics bank
             rec_kinematics_event_table = get_event_table(rec_kinematics_keys,event_num,batch,dtype=float)
+            if len(np.shape(rec_kinematics_event_table))<=1: rec_kinematics_event_table = np.reshape(rec_kinematics_event_table,(1,-1))
             
             # Get MC::Lund bank and MC->REC matching indices
             y = [0]
