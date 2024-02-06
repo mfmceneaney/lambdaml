@@ -341,10 +341,10 @@ def get_binary_classification_metrics(
                 raise ValueError("`kin_names` must be set and have the same length as the 2nd dimension of `kins`.")
 
             # Get truth-matched and flattened kinematics arrays
-            kins_sg_true  = kin[np.logical_and(preds==1,ys==1)].flatten()
-            kins_sg_false = kin[np.logical_and(preds==1,ys==0)].flatten()
-            kins_bg_false = kin[np.logical_and(preds==0,ys==1)].flatten()
-            kins_bg_true  = kin[np.logical_and(preds==0,ys==0)].flatten()
+            kins_sg_true  = kins[np.logical_and(preds==1,ys==1)].flatten()
+            kins_sg_false = kins[np.logical_and(preds==1,ys==0)].flatten()
+            kins_bg_false = kins[np.logical_and(preds==0,ys==1)].flatten()
+            kins_bg_true  = kins[np.logical_and(preds==0,ys==0)].flatten()
 
             # Loop kinematics
             for idx in range(len(kins[0])):
