@@ -163,4 +163,5 @@ if __name__=="__main__":
             epochs=args.epochs,
             use_wandb=args.use_wandb,
             num_workers=args.num_workers,
+            max_files=args.max_files,
         )
