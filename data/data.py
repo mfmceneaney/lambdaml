@@ -20,7 +20,7 @@ def static_split(dataset,lengths):
 
     if len(lengths)>3 or len(lengths)<2:
         raise ValueError("len(lengths) must be in (2,3)")
-    if not is_close(sum(lengths),1) or sum(lengths)>1:
+    if not isclose(sum(lengths),1) or sum(lengths)>1:
         raise ValueError("lengths must sum to 1.0")
 
     cum_fracs = [sum(lengths[:idx]) for idx in range(1,len(lengths)+1)]
