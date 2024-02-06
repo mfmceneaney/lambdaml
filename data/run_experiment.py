@@ -12,7 +12,7 @@ from torch.nn import CrossEntropyLoss
 import tqdm
 
 # Local imports
-from data import CustomDataset
+from data import static_split, CustomDataset
 from models import GIN
 from utils import experiment
 
@@ -51,7 +51,7 @@ def main(root_labelled="",root_unlabelled="",lengths_labelled=[0.8,0.1,0.1],leng
         )
 
     # Split datasets
-    ds_labelled_train, ds_labelled_val, ds_labelled_test = random_split(ds_labelled,lengths_labelled)
+    ds_labelled_train, ds_labelled_val, ds_labelled_test = static_split(ds_labelled,lengths_labelled)
 
     # Create samplers if requested #TODO!
     use_weighted_samplers = False
