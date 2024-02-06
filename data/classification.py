@@ -105,7 +105,7 @@ def test(
         outs = out.cpu() if len(outs)==0 else torch.cat((outs,out.cpu()),axis=0)
         preds = pred.cpu() if len(preds)==0 else torch.cat((preds,pred.cpu()),axis=0)
         ys = data.y.cpu() if len(ys)==0 else torch.cat((ys,data.y.cpu()),axis=0)
-        if get_kins: kins = data.kinematics.cpu() if len(kins)==0 else torch.cat((kins,data.kinematics.cpu()),axis=0)
+        if get_kins: kins.extend(data.kinematics.cpu())
 
     return loss, outs, preds, ys, kins
 
@@ -151,7 +151,7 @@ def test_nolabels(
         # Add evaluation data to overall lists
         outs = out.cpu() if len(outs)==0 else torch.cat((outs,out.cpu()),axis=0)
         preds = pred.cpu() if len(preds)==0 else torch.cat((preds,pred.cpu()),axis=0)
-        if get_kins: kins = data.kinematics.cpu() if len(kins)==0 else torch.cat((kins,data.kinematics.cpu()),axis=0)
+        if get_kins: kins.extend(data.kinematics.cpu())
 
     return outs, preds, kins
 
@@ -306,10 +306,10 @@ def get_binary_classification_metrics(
         plots['confusion_matrix_plot'] = confusion_matrix_plot
 
         # Separate outputs of model
-        outs_sg_true  = outs[:,1][torch.logical_and(preds==1,ys==1)]
-        outs_sg_false = outs[:,1][torch.logical_and(preds==1,ys==0)]
-        outs_bg_false  = outs[:,1][torch.logical_and(preds==0,ys==1)]
-        outs_bg_true   = outs[:,1][torch.logical_and(preds==0,ys==0)]
+        outs_sg_true  = outs[:,1][np.logical_and(preds==1,ys==1)]
+        outs_sg_false = outs[:,1][np.logical_and(preds==1,ys==0)]
+        outs_bg_false  = outs[:,1][np.logical_and(preds==0,ys==1)]
+        outs_bg_true   = outs[:,1][np.logical_and(preds==0,ys==0)]
 
         # Plot separated output distributions
         outs_sg, outs_sg_and_bg = plot_data_separated(
@@ -331,7 +331,7 @@ def get_binary_classification_metrics(
         # Plot separated kinematics distributions
         if kins is not None:
 
-            # Create awkward array so you can easily flatten later
+            # Create awkward array since kinematics will not be same length for every event
             kins = ak.Array(kins)
 
             # Check dimensions
@@ -340,17 +340,20 @@ def get_binary_classification_metrics(
             if kin_names is None or len(kin_names)!=len(kins[0]):
                 raise ValueError("`kin_names` must be set and have the same length as the 2nd dimension of `kins`.")
 
+            # Get truth-matched and flattened kinematics arrays
+            kins_sg_true  = kin[np.logical_and(preds==1,ys==1)].flatten()
+            kins_sg_false = kin[np.logical_and(preds==1,ys==0)].flatten()
+            kins_bg_false = kin[np.logical_and(preds==0,ys==1)].flatten()
+            kins_bg_true  = kin[np.logical_and(preds==0,ys==0)].flatten()
+
             # Loop kinematics
             for idx in range(len(kins[0])):
-                kin = kins[:,idx]
-                kin_label = kin_labels[idx]
-                kin_name  = kin_names[idx]
-
-                # Get truth-matched and flattened kinematics arrays
-                kin_sg_true  = kin[torch.logical_and(preds==1,ys==1)].flatten()
-                kin_sg_false = kin[torch.logical_and(preds==1,ys==0)].flatten()
-                kin_bg_false = kin[torch.logical_and(preds==0,ys==1)].flatten()
-                kin_bg_true  = kin[torch.logical_and(preds==0,ys==0)].flatten()
+                kin_sg_true  = kins_sg_true[:,idx]
+                kin_sg_false = kins_sg_false[:,idx]
+                kin_bg_false = kins_bg_false[:,idx]
+                kin_bg_true  = kins_bg_true[:,idx]
+                kin_label    = kin_labels[idx]
+                kin_name     = kin_names[idx]
 
                 # Plot separated kinematic distributions
                 kin_sg, kin_sg_and_bg = plot_data_separated(
