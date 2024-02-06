@@ -46,16 +46,18 @@ class CustomDataset(Dataset):
     :class: CustomDataset
     """
 
-    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
+    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None, max_files=0):
         self.length = 0 # Overall dataset length
         self.lengths = [0] # List of cumulative data file lengths
         self.current = 0 # Current data file index
         self.current_ds = None # CustomInMemoryDataset object of current data file
+        self.max_files = max_files
         super().__init__(root, transform, pre_transform, pre_filter)
 
     @property
     def processed_file_names(self):
-        return sorted(glob(osp.join(self.root,'processed/')+'data*.pt')) #TODO: Set these in __init__() How to get file names from directory?
+        pfns = sorted(glob(osp.join(self.root,'processed/')+'data*.pt'))
+        return pfns if self.max_files<=0 else pfns[:max_files]
 
     def len(self):
         # Loop through all dataset files loading as in memory datasets and add lengths
