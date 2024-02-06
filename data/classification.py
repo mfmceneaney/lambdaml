@@ -160,7 +160,7 @@ def plot_data_separated(
         sg_false,
         bg_false,
         bg_true,
-        title=None,
+        title='Separated distributions MC-matched',
         xlabel='index',
         nbins=50,
         low=-1.1,
@@ -188,9 +188,7 @@ def plot_data_separated(
     
     # Plot signal distributions
     f1 = plt.figure(figsize=figsize)
-    if title != None:
-        plt.title(title)
-    else: plt.title('Separated distribution MC-matched')
+    plt.title(title)
     plt.hist(sg_true, color='tab:red', alpha=0.5, range=(low,high), bins=nbins, histtype='stepfilled', density=False, label='True Signal')
     plt.hist(sg_false, color='tab:orange', alpha=0.5, range=(low,high), bins=nbins, histtype='stepfilled', density=False, label='False Signal')
     plt.legend(loc='upper left', frameon=False)
@@ -200,9 +198,7 @@ def plot_data_separated(
 
     # Plot signal and background distributions
     f2 = plt.figure(figsize=figsize)
-    if title != None:
-        plt.title(title)
-    else: plt.title('Separated distribution MC-matched')
+    plt.title(title)
     plt.hist(sg_true, color='tab:red', alpha=0.5, range=(low,high), bins=nbins, histtype='stepfilled', density=False, label='True Signal')
     plt.hist(sg_false, color='tab:orange', alpha=0.5, range=(low,high), bins=nbins, histtype='stepfilled', density=False, label='False Signal')
     plt.hist(bg_false, color='tab:green', alpha=0.5, range=(low,high), bins=nbins, histtype='stepfilled', density=False, label='False Background')
@@ -219,7 +215,7 @@ def plot_data_sg_bg(
         sg_false,
         bg_false,
         bg_true,
-        title=None,
+        title='Separated signal and background distributions',
         xlabel='index',
         nbins=50,
         low=-1.1,
@@ -245,9 +241,7 @@ def plot_data_sg_bg(
     
     # Plot signal and bg distributions
     f1 = plt.figure(figsize=figsize)
-    if title != None:
-        plt.title(title)
-    else: plt.title('Separated distribution MC-matched')
+    plt.title(title)
     plt.hist(array_sg, color='tab:red', alpha=0.5, range=(low,high), bins=nbins, histtype='stepfilled', density=False, label='Signal')
     plt.hist(array_bg, color='tab:orange', alpha=0.5, range=(low,high), bins=nbins, histtype='stepfilled', density=False, label='Background')
     plt.legend(loc='upper left', frameon=False)
@@ -365,7 +359,7 @@ def get_binary_classification_metrics(
                     kin_bg_false,
                     kin_bg_true,
                     title='Separated output distributions',
-                    xlabel='NN output',
+                    xlabel=kin_label,
                     nbins=50,
                     low=np.min(kin), #TODO: Pass these from config above
                     high=np.max(kin),
@@ -417,7 +411,7 @@ def get_binary_classification_metrics_nolabels(
         outs_sg, outs_sg_and_bg = plot_data_sg_bg(
             outs_sg,
             outs_bg,
-            title='Separated output distributions',
+            title='Separated output signal and background distributions',
             xlabel='NN output',
             nbins=50,
             low=-1.1,
@@ -454,8 +448,8 @@ def get_binary_classification_metrics_nolabels(
                 kin_sg = plot_data_sg_bg(
                     kin_sg,
                     kin_bg,
-                    title='Separated output distributions',
-                    xlabel='NN output',
+                    title='Separated output signal and background distributions',
+                    xlabel=kin_label,
                     nbins=50,
                     low=np.min(kin), #TODO: Pass these from config above
                     high=np.max(kin),
