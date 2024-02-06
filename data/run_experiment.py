@@ -16,7 +16,7 @@ from data import CustomDataset
 from models import GIN
 from utils import experiment
 
-def main(root_labelled="",root_unlabelled="",lengths_labelled=[0.8,0.1,0.1],lengths_unlabelled=None,batch_size=32,lr=1e-3,epochs=100,use_wandb=True,num_workers=0):
+def main(root_labelled="",root_unlabelled="",lengths_labelled=[0.8,0.1,0.1],lengths_unlabelled=None,batch_size=32,lr=1e-3,epochs=100,use_wandb=True,num_workers=0,max_files=0):
     """
     :description: Create PyG dataset and save to file.  Graph data is taken from REC::Traj and preprocessed with processing.preprocess_rec_traj.
 
@@ -39,13 +39,15 @@ def main(root_labelled="",root_unlabelled="",lengths_labelled=[0.8,0.1,0.1],leng
             root_labelled,
             transform=None,
             pre_transform=None,
-            pre_filter=None
+            pre_filter=None,
+            max_files=max_files,
         )
     ds_unlabelled = CustomDataset(
             root_unlabelled,
             transform=None,
             pre_transform=None,
-            pre_filter=None
+            pre_filter=None,
+            max_files=max_files,
         )
 
     # Split datasets
@@ -143,6 +145,8 @@ if __name__=="__main__":
                         help='Log to WANDB')
     parser.add_argument('--num_workers', type=int, default=0,
                         help='Number of workers processes for dataloaders')
+    parser.add_argument('--max_files', type=int, default=0,
+                        help='Maximum number of files to use from dataset')
 
     # Parse
     args = parser.parse_args()
