@@ -410,7 +410,7 @@ def get_binary_classification_metrics_nolabels(
         outs_bg = outs[:,1][preds==0]
 
         # Plot separated output distributions
-        outs_sg, outs_sg_and_bg = plot_data_sg_bg(
+        outs_sg_and_bg = plot_data_sg_bg(
             outs_sg,
             outs_bg,
             title='Separated output signal and background distributions',
@@ -421,7 +421,6 @@ def get_binary_classification_metrics_nolabels(
             logy=True,
             figsize=(16,10)
             )
-        plots['outs_sg'+identifier_key] = outs_sg
         plots['outs_sg_and_bg'+identifier_key] = outs_sg_and_bg
 
         # Plot separated kinematics distributions
