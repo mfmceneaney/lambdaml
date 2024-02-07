@@ -75,7 +75,7 @@ def train(model=None,device=None,train_dataloader=None,val_dataloader=None,optim
                 'precision':precision,
                 'recall':recall,
                 'roc_auc':roc_auc,
-                **optimizer.param_groups[0]['lr'], #TODO: Check this...
+                'lr': optimizer.param_groups[0]['lr'], #TODO: Check this...
             })
 
         # Step learning rate
