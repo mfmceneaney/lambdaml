@@ -448,7 +448,7 @@ def get_binary_classification_metrics_nolabels(
                 kin_name  = kin_names[idx]
 
                 # Plot separated kinematic distributions
-                kin_sg = plot_data_sg_bg(
+                kin_sg_and_bg = plot_data_sg_bg(
                     kin_sg,
                     kin_bg,
                     title='Separated output signal and background distributions',
