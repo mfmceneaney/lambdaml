@@ -144,7 +144,7 @@ def apply(model=None,device=None,dataloader=None,kin_names=None,kin_labels=None,
 
     :return: massfit_metrics
     """
-    loss, outs, preds, kins = classification.test_nolabels(
+    outs, preds, kins = classification.test_nolabels(
         model,
         device,
         dataloader,
