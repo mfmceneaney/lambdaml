@@ -471,7 +471,7 @@ def get_lambda_mass_fit(
         true_labels=None,
         sg_min=1.11,
         sg_max=1.13,
-        nbins=100,
+        bins=100,
         low_high=(1.08,1.24),
         mass_index=-1,
     ):
@@ -482,7 +482,7 @@ def get_lambda_mass_fit(
     :param: true_labels
     :param: sg_min
     :param: sg_max
-    :param: nbins
+    :param: bins
     :param: low_high
     :param: mass_index
 
