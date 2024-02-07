@@ -211,10 +211,8 @@ def plot_data_separated(
     return f1, f2
 
 def plot_data_sg_bg(
-        sg_true,
-        sg_false,
-        bg_false,
-        bg_true,
+        array_sg,
+        array_bg,
         title='Separated signal and background distributions',
         xlabel='index',
         nbins=50,
