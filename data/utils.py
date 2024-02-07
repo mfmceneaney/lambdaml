@@ -188,7 +188,7 @@ def experiment(config,use_wandb=True):
 
     # Log experiment config
     if use_wandb: 
-        wandb.init(**config)
+        wandb.init(config)
         wandb.watch(model)
 
     # Run training validation and testing
