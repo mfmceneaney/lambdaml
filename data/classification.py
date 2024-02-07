@@ -560,7 +560,7 @@ def get_lambda_mass_fit(
 
     return { #TODO: Return f, resultsN, resultS, resultB, integral_bghist, integral_tothist, fom, purity, ... true values in signal region
         'massfit_plot':f,
-        'resultsN':resultsN,
+        'resultN':resultN,
         'resultS':resultS,
         'resultB':resultB,
         'integral_bghist':integral_bghist,
