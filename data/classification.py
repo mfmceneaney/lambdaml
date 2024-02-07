@@ -365,8 +365,8 @@ def get_binary_classification_metrics(
                     title='Separated output distributions',
                     xlabel=kin_label,
                     nbins=50,
-                    low=np.min(kin), #TODO: Pass these from config above
-                    high=np.max(kin),
+                    low=np.min(kins[:,idx]), #TODO: Pass these from config above
+                    high=np.max(kins[:,idx]),
                     logy=True,
                     figsize=(16,10)
                     )
@@ -457,8 +457,8 @@ def get_binary_classification_metrics_nolabels(
                     title='Separated output signal and background distributions',
                     xlabel=kin_label,
                     nbins=50,
-                    low=np.min(kin), #TODO: Pass these from config above
-                    high=np.max(kin),
+                    low=np.min(kins[:,idx]), #TODO: Pass these from config above
+                    high=np.max(kins[:,idx]),
                     logy=True,
                     figsize=(16,10)
                     )
