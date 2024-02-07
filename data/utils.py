@@ -164,10 +164,13 @@ def apply(model=None,device=None,dataloader=None,kin_names=None,kin_labels=None,
 
     return massfit_metrics
 
-def experiment(config,use_wandb=True):
+def experiment(config,use_wandb=True,wandb_project='project',wandb_config={},**kwargs):
     """
     :param: config
     :param: use_wandb
+    :param: wandb_project
+    :param: wandb_config
+    :param: **kwargs
 
     :return: test_val, apply_val
     """
@@ -187,8 +190,9 @@ def experiment(config,use_wandb=True):
     kin_labels       = config['kin_labels']
 
     # Log experiment config
+    run = None
     if use_wandb: 
-        wandb.init(config)
+        run = wandb.init(project=wandb_project,config=wandb_config,**kwargs)
         wandb.watch(model)
 
     # Run training validation and testing
