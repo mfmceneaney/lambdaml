@@ -74,7 +74,6 @@ def main(infiles,outdir,step,start=0,nolabels=False):
             
             # Get REC::Kinematics bank
             rec_kinematics_event_table = get_event_table(rec_kinematics_keys,event_num,batch,dtype=float)
-            if len(np.shape(rec_kinematics_event_table))<=1: rec_kinematics_event_table = np.reshape(rec_kinematics_event_table,(1,-1))
             
             # Get MC::Lund bank and MC->REC matching indices
             y = [0]
@@ -97,7 +96,7 @@ def main(infiles,outdir,step,start=0,nolabels=False):
             # Create PyG graph
             data             = tg.data.Data(x=x, edge_index=edge_index.t().contiguous())
             data.y           = torch.tensor(y,dtype=torch.long) #NOTE: Add extra dimension here so that training gets target batch dimension right.
-            data.kinematics  = torch.tensor(rec_kinematics_event_table,dtype=torch.float32)
+            data.kinematics  = rec_kinematics_event_table.tolist() #NOTE: It is important that this is a list since there is an irregular number of kinematics combos per event.  If this is a tensor or array, during batching the event index will be lost resulting in a dimension mismatch.
             data.rec_indices = torch.tensor(rec_indices,dtype=torch.long)
             
             # Add graph to dataset
