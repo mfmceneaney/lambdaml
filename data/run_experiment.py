@@ -16,7 +16,7 @@ from data import static_split, CustomDataset
 from models import GIN
 from utils import experiment
 
-def main(root_labelled="",root_unlabelled="",lengths_labelled=[0.8,0.1,0.1],lengths_unlabelled=None,batch_size=32,lr=1e-3,epochs=100,use_wandb=True,num_workers=0,max_files=0):
+def main(root_labelled="",root_unlabelled="",lengths_labelled=[0.8,0.1,0.1],lengths_unlabelled=None,batch_size=32,lr=1e-3,epochs=100,use_wandb=True,num_workers=0,max_files=0,project='project'):
     """
     :description: Create PyG dataset and save to file.  Graph data is taken from REC::Traj and preprocessed with processing.preprocess_rec_traj.
 
@@ -30,6 +30,7 @@ def main(root_labelled="",root_unlabelled="",lengths_labelled=[0.8,0.1,0.1],leng
     :param: use_wandb
     :param: num_workers
     :param: max_files
+    :param: project
     """
 
     # Select device
@@ -118,8 +119,22 @@ def main(root_labelled="",root_unlabelled="",lengths_labelled=[0.8,0.1,0.1],leng
         "kin_labels": kin_labels,
     }
 
+    wandb_config = {
+        "device": device,
+        "root_labelled": root_labelled,
+        "root_unlabelled": root_unlabelled,
+        "lengths_labelled": lengths_labelled,
+        "lengths_unlabelled": lengths_unlabelled,
+        "batch_size": batch_size,
+        "lr": lr,
+        "epochs": epochs,
+        "num_workers": num_workers,
+        "max_files": max_files,
+        **model_params
+    }
+
     # Run experiment
-    experiment(config,use_wandb=use_wandb)
+    experiment(config,use_wandb=use_wandb,wandb_project=project,wandb_config=wandb_config)
 
 # Run script
 if __name__=="__main__":
@@ -148,6 +163,8 @@ if __name__=="__main__":
                         help='Number of workers processes for dataloaders')
     parser.add_argument('--max_files', type=int, default=0,
                         help='Maximum number of files to use from dataset')
+    parser.add_argument('--project', type=str, default='project',
+                        help='WANDB project name')
 
     # Parse
     args = parser.parse_args()
@@ -164,4 +181,5 @@ if __name__=="__main__":
             use_wandb=args.use_wandb,
             num_workers=args.num_workers,
             max_files=args.max_files,
+            project=args.project,
         )
