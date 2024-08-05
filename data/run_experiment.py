@@ -61,14 +61,14 @@ def main(root_labelled="",root_unlabelled="",lengths_labelled=[0.8,0.1,0.1],leng
     sl_labelled_val       = None
 
     # Create dataloaders
-    dl_labelled_train   = DataLoader(ds_labelled_train, sampler=sl_labelled_train, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    dl_labelled_train   = DataLoader(ds_labelled_train, sampler=sl_labelled_train, batch_size=batch_size, shuffle=True, num_workers=num_workers)
     dl_labelled_val     = DataLoader(ds_labelled_val, sampler=sl_labelled_val, batch_size=batch_size, shuffle=False, num_workers=num_workers)
     dl_labelled_test    = DataLoader(ds_labelled_test, batch_size=batch_size, shuffle=False, num_workers=num_workers)
     dl_unlabelled_apply = DataLoader(ds_unlabelled, batch_size=batch_size, shuffle=False, num_workers=num_workers)
 
     # Create model #TODO: Could load args from yaml so easily configurable
     model_params = {
-            'in_channels': 7,
+            'in_channels': dl_labelled_train.num_node_features,
             'gnn_num_layers': 4,
             'gnn_num_mlp_layers': 3,
             'gnn_mlp_hidden_dim': 128,
@@ -80,7 +80,7 @@ def main(root_labelled="",root_unlabelled="",lengths_labelled=[0.8,0.1,0.1],leng
             'head_norm': None,
             'head_act': 'relu',
             'dropout': 0.5,
-            'out_channels': 2,
+            'out_channels': dl_labelled_train.num_classes,
             'pool': 'max',
     }
     model=GIN(
