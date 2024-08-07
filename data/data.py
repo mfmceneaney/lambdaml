@@ -85,10 +85,11 @@ class CustomDataset(Dataset):
         self.current_ds = None # CustomInMemoryDataset object of current data file
         self.max_files = max_files
         super().__init__(root, transform, pre_transform, pre_filter)
+        self.get(0) #NOTE: IMPORTANT TO CORRECTLY SETUP UP FIRST DATASET AND SET ENTIRE DATASET LENGTH
 
     @property
     def processed_file_names(self):
-        pfns = sorted(glob(osp.join(self.root,'processed/')+'data*.pt'))
+        pfns = sorted(glob(osp.join(osp.abspath(self.root),'processed/')+'data*.pt'))
         return pfns if self.max_files<=0 else pfns[:self.max_files]
 
     def len(self):
