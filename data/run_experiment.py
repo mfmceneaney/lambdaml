@@ -3,13 +3,10 @@
 #----------------------------------------------------------------------#
 
 import argparse
-import hipopy.hipopy as hp
 import numpy as np
 import torch
-from torch.utils.data import random_split
 from torch_geometric.loader import DataLoader
 from torch.nn import CrossEntropyLoss
-import tqdm
 
 # Local imports
 from data import static_split, CustomDataset
@@ -91,7 +88,6 @@ def main(root_labelled="",root_unlabelled="",lengths_labelled=[0.8,0.1,0.1],leng
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
     # Create loss function with weights
-    data0          = ds_labelled.get(0) #NOTE: IMPORTANT!  Open first data file
     data_labels    = ds_labelled.current_ds.y
     unique, counts = np.unique(data_labels,return_counts=True)
     weight_signal  = counts[1]/counts[0]

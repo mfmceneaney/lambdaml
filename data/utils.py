@@ -8,28 +8,12 @@ import wandb
 # Optimization
 import optuna
 
-# Data
-import numpy
-import torch
-
-# ML
-import torch_geometric as tg
-import sklearn
-import modeloss
-import umap
-
-# Plotting
-import matplotlib.pyplot as plt
-import seaborn as sns
-
 # Miscellaneous
 import os
-import sys
 from tqdm import tqdm
 
 # Local
 import data
-import models
 import classification
 
 def train(model=None,device=None,train_dataloader=None,val_dataloader=None,optimizer=None,criterion=None,scheduler=None,epochs=100,use_wandb=True):
@@ -131,7 +115,6 @@ def test(model=None,device=None,dataloader=None,criterion=None,kin_names=None,ki
         'roc_auc': roc_auc,
         **massfit_metrics
     }
-
 
 def apply(model=None,device=None,dataloader=None,kin_names=None,kin_labels=None,use_wandb=True):
     """
