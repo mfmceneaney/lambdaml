@@ -2,6 +2,9 @@
 # Author: Matthew McEneaney, Duke University
 #----------------------------------------------------------------------#
 
+# ML
+import torch
+
 # Logging
 import wandb
 
