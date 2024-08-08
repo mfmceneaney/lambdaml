@@ -333,11 +333,27 @@ def get_binary_classification_metrics(
             kins = ak.Array(kins)
 
             # Get truth-matched and flattened kinematics arrays
-            kins_sg_true  = ak.flatten(kins[np.logical_and(preds.numpy()==1,ys.numpy()==1)],axis=1) #NOTE: Make sure single match entries for kinematics are wrapped in extra 1D layer!
-            kins_sg_false = ak.flatten(kins[np.logical_and(preds.numpy()==1,ys.numpy()==0)],axis=1)
-            kins_bg_false = ak.flatten(kins[np.logical_and(preds.numpy()==0,ys.numpy()==1)],axis=1)
-            kins_bg_true  = ak.flatten(kins[np.logical_and(preds.numpy()==0,ys.numpy()==0)],axis=1)
-            kins          = ak.flatten(kins,axis=1)
+            kins_sg_true  = kins[np.logical_and(preds.numpy()==1,ys.numpy()==1)] #NOTE: Make sure single match entries for kinematics are wrapped in extra 1D layer!
+            kins_sg_false = kins[np.logical_and(preds.numpy()==1,ys.numpy()==0)]
+            kins_bg_false = kins[np.logical_and(preds.numpy()==0,ys.numpy()==1)]
+            kins_bg_true  = kins[np.logical_and(preds.numpy()==0,ys.numpy()==0)]
+
+            def myflatten(some_array):
+                new_array = []
+                for el in some_array:
+                    if type(el[0])==ak.Array or type(el[0])==list:
+                        for sub_el in el:
+                            new_array.append(sub_el)
+                    else:
+                        new_array.append(el)
+                return new_array
+
+            # Flatten events with more than one set of kinematics and convert to numpy arrays
+            kins          = np.array(myflatten(kins))
+            kins_sg_true  = np.array(myflatten(kins_sg_true))
+            kins_sg_false = np.array(myflatten(kins_sg_false))
+            kins_bg_false = np.array(myflatten(kins_bg_false))
+            kins_bg_true  = np.array(myflatten(kins_bg_true))
 
             # Check dimensions
             if kin_labels is None or len(kin_labels)!=len(kins[0]):
