@@ -446,9 +446,23 @@ def get_binary_classification_metrics_nolabels(
             kins = ak.Array(kins)
 
             # Get truth-matched and flattened kinematics arrays
-            kins_sg = ak.flatten(kins[preds.numpy()==1],axis=1) #NOTE: Make sure single match entries for kinematics are wrapped in extra 1D layer!
-            kins_bg = ak.flatten(kins[preds.numpy()==0],axis=1)
-            kins    = ak.flatten(kins,axis=1)
+            kins_sg = kins[preds.numpy()==1] #NOTE: Make sure single match entries for kinematics are wrapped in extra 1D layer!
+            kins_bg = kins[preds.numpy()==0]
+
+            def myflatten(some_array):
+                new_array = []
+                for el in some_array:
+                    if type(el[0])==ak.Array or type(el[0])==list:
+                        for sub_el in el:
+                            new_array.append(sub_el)
+                    else:
+                        new_array.append(el)
+                return new_array
+
+            # Flatten events with more than one set of kinematics and convert to numpy arrays
+            kins    = np.array(myflatten(kins))
+            kins_sg = np.array(myflatten(kins_sg))
+            kins_bg = np.array(myflatten(kins_bg))
 
             # Check dimensions
             if kin_labels is None or len(kin_labels)!=len(kins[0]):
@@ -502,6 +516,19 @@ def get_lambda_mass_fit(
     :return: metrics
     """
 
+    def myflatten(some_array):
+        new_array = []
+        for el in some_array:
+            if type(el[0])==ak.Array or type(el[0])==list:
+                for sub_el in el:
+                    new_array.append(sub_el)
+            else:
+                new_array.append(el)
+        return new_array
+
+    # Flatten events with more than one set of kinematics and convert to numpy arrays
+    kins = np.array(myflatten(kins))
+
     # Create fit functions
     def func(x, N, beta, m, loc, scale, A, B, C):
         return N*crystalball.pdf(-x, beta, m, -loc, scale) + A*(1 - B*(x - C)**2)
@@ -515,7 +542,7 @@ def get_lambda_mass_fit(
     # Create histogram
     f = plt.figure(figsize=(16,10))
     plt.title('Separated mass distribution')
-    masses = ak.flatten(ak.Array(kins),axis=1)[:,mass_index]
+    masses =  kins[:,mass_index]
     hdata = plt.hist(masses, color='tab:blue', alpha=0.5, range=low_high, bins=bins, histtype='stepfilled', density=False, label='signal')
 
     # Fit histogram
