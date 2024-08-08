@@ -235,6 +235,7 @@ def optimize(
             ntrials=100,
             timeout=864000,
             gc_after_trial=True,
+            log_dir="./",
             **kwargs
             ):
     """
@@ -251,6 +252,7 @@ def optimize(
     :param: ntrials
     :param: timeout
     :param: gc_after_trial
+    :param: log_dir
     """
 
     def objective(trial):
@@ -258,20 +260,28 @@ def optimize(
         trial_config = config.copy() #NOTE: COPY IS IMPORTANT HERE!
 
         # Suggest trial params and substitute into trial_config also set log dir name with trial param of objective
-        log_dir = wandb_project+'___'
         for idx, opt_par_name in enumerate(opt_par_config):
             lims = opt_par_config[opt_par]['lims']
             if len(lims)!=2:
                 raise TypeError("opt_par_config limits must be length 2 but opt_par_config[",opt_par,"]['lims'] has length",len(lims))
-            log  = opt_par_config[opt_par]['log']
+            log = opt_par_config[opt_par]['log']
+            trial_opt_par = None
             if type(lims[0])==int:
-                trial.suggest_int(opt_par_name,lims[0],lims[1],log=log)
+                trial_opt_par = trial.suggest_int(opt_par_name,lims[0],lims[1],log=log)
             elif type(lims[0])==float:
-                trial.suggest_float(opt_par_name,lims[0],lims[1],log=log)
+                trial_opt_par = trial.suggest_float(opt_par_name,lims[0],lims[1],log=log)
             trial_config[opt_par] = trial_opt_par
-            trial_log_dir += '_'.join([opt_par_name,str(trial_opt_par)])
-            if idx<len(opt_par_config)-1: trial_log_dir += '__'
-        trial_config['log_dir'] = log_dir
+
+        # Set trial number so this gets passed to wandb
+        trial_config['trial_number'] = trial.number
+
+        # Create output directory if it does not exist
+        trial_log_dir = os.path.abspath(log_dir)+"/trial_"+str(trial.number)
+        if not os.path.isdir(trial_log_dir):
+            try:
+                os.makedirs(trial_log_dir) #NOTE: Do NOT use os.path.join() here since it requires that the directory exist.
+            except Exception:
+                if verbose: print("Could not create output directory:",trial_log_dir)
 
         experiment_val = experiment(
             trial_config,
