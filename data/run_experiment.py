@@ -16,7 +16,7 @@ from utils import experiment
 
 def main(root_labelled="",root_unlabelled="",lengths_labelled=[0.8,0.1,0.1],lengths_unlabelled=None,batch_size=32,lr=1e-3,epochs=100,use_wandb=True,num_workers=0,max_files=0,project='project',log_dir="./"):
     """
-    :description: Create PyG dataset and save to file.  Graph data is taken from REC::Traj and preprocessed with processing.preprocess_rec_traj.
+    :description: Run an experiment training, testing, and applying a Lambda GNN model.
 
     :param: root_labelled
     :param: root_unlabelled
@@ -141,7 +141,7 @@ def main(root_labelled="",root_unlabelled="",lengths_labelled=[0.8,0.1,0.1],leng
 
     # Run experiment
     experiment(config,use_wandb=use_wandb,wandb_project=project,wandb_config=wandb_config)
-    
+
 # Run script
 if __name__=="__main__":
     
