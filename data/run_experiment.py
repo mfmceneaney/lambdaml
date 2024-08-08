@@ -3,6 +3,7 @@
 #----------------------------------------------------------------------#
 
 import argparse
+import os
 import numpy as np
 import torch
 from torch_geometric.loader import DataLoader
@@ -13,7 +14,7 @@ from data import static_split, CustomDataset
 from models import GIN
 from utils import experiment
 
-def main(root_labelled="",root_unlabelled="",lengths_labelled=[0.8,0.1,0.1],lengths_unlabelled=None,batch_size=32,lr=1e-3,epochs=100,use_wandb=True,num_workers=0,max_files=0,project='project'):
+def main(root_labelled="",root_unlabelled="",lengths_labelled=[0.8,0.1,0.1],lengths_unlabelled=None,batch_size=32,lr=1e-3,epochs=100,use_wandb=True,num_workers=0,max_files=0,project='project',log_dir="./"):
     """
     :description: Create PyG dataset and save to file.  Graph data is taken from REC::Traj and preprocessed with processing.preprocess_rec_traj.
 
@@ -99,6 +100,14 @@ def main(root_labelled="",root_unlabelled="",lengths_labelled=[0.8,0.1,0.1],leng
     kin_names  = ["idxe","idxp","idxpi","Q2","nu","W","x","y","z_ppim","xF_ppim","mass_ppim"]
     kin_labels = ["idxe","idxp","idxpi","$Q^2$ (GeV$^2$)","$\\nu$","$W$ (GeV)","$x$","$y$","$z_{p\pi^{-}}","$x_{F p\pi^{-}}","$M_{p\pi^{-}}$ (GeV)"]
 
+    # Create output directory if it does not exist
+    log_dir = os.path.abspath(log_dir)
+    if not os.path.isdir(log_dir):
+        try:
+            os.makedirs(log_dir) #NOTE: Do NOT use os.path.join() here since it requires that the directory exist.
+        except Exception:
+            if verbose: print("Could not create output directory:",log_dir)
+
     # Create config
     config = {
         "model": model,
@@ -113,6 +122,7 @@ def main(root_labelled="",root_unlabelled="",lengths_labelled=[0.8,0.1,0.1],leng
         "epochs": epochs,
         "kin_names": kin_names,
         "kin_labels": kin_labels,
+        "log_dir": log_dir,
     }
 
     wandb_config = {
@@ -131,7 +141,7 @@ def main(root_labelled="",root_unlabelled="",lengths_labelled=[0.8,0.1,0.1],leng
 
     # Run experiment
     experiment(config,use_wandb=use_wandb,wandb_project=project,wandb_config=wandb_config)
-
+    
 # Run script
 if __name__=="__main__":
     
@@ -161,6 +171,8 @@ if __name__=="__main__":
                         help='Maximum number of files to use from dataset')
     parser.add_argument('--project', type=str, default='project',
                         help='WANDB project name')
+    parser.add_argument('--log_dir', type=str, default='./',
+                        help='Log directory path')
 
     # Parse
     args = parser.parse_args()
@@ -178,4 +190,5 @@ if __name__=="__main__":
             num_workers=args.num_workers,
             max_files=args.max_files,
             project=args.project,
+            log_dir=args.log_dir,
         )
