@@ -9,7 +9,7 @@ import wandb
 import optuna
 
 # Miscellaneous
-import os
+import os.path as osp
 from tqdm import tqdm
 
 # Local
@@ -171,6 +171,7 @@ def experiment(config,use_wandb=True,wandb_project='project',wandb_config={},**k
     epochs           = config['epochs']
     kin_names        = config['kin_names']
     kin_labels       = config['kin_labels']
+    log_dir          = osp.abspath(config['log_dir'])
 
     # Log experiment config
     run = None
@@ -178,7 +179,7 @@ def experiment(config,use_wandb=True,wandb_project='project',wandb_config={},**k
         run = wandb.init(project=wandb_project,config=wandb_config,**kwargs)
         wandb.watch(model)
 
-    # Run training validation and testing
+    # Train model
     train(
         model=model,
         device=device,
@@ -190,6 +191,12 @@ def experiment(config,use_wandb=True,wandb_project='project',wandb_config={},**k
         epochs=epochs,
         use_wandb=use_wandb
     )
+
+    # Save model
+    path = osp.join(log_dir,'model.pt')
+    torch.save(model,path,map_location='cpu')
+
+    # Test model
     test_val  = test(
         model=model,
         device=device,
@@ -199,6 +206,8 @@ def experiment(config,use_wandb=True,wandb_project='project',wandb_config={},**k
         kin_labels=kin_labels,
         use_wandb=use_wandb
     )
+
+    # Apply model
     apply_val = apply(
         model=model,
         device=device,
