@@ -214,11 +214,11 @@ def experiment(config,use_wandb=True,wandb_project='project',wandb_config={},**k
     return test_val, apply_val
 
 def optimize(
+            config={},
             opt_par_config={},
             use_wandb=True,
             wandb_project='project',
             wandb_config={},
-            default_config={},
             study_name='study',
             direction='minimize',
             minimization_key='roc_auc',
@@ -234,7 +234,7 @@ def optimize(
     :param: use_wandb
     :param: wandb_project
     :param: wandb_config
-    :param: default_config
+    :param: config
     :param: study_name
     :param: direction
     :param: minimization_key
@@ -246,7 +246,7 @@ def optimize(
 
     def objective(trial):
 
-        trial_config = default_config.copy() #NOTE: COPY IS IMPORTANT HERE!
+        trial_config = config.copy() #NOTE: COPY IS IMPORTANT HERE!
 
         # Suggest trial params and substitute into trial_config also set log dir name with trial param of objective
         log_dir = wandb_project+'___'
