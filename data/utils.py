@@ -218,7 +218,7 @@ def optimize(
             use_wandb=True,
             wandb_project='project',
             wandb_config={},
-            default_config,
+            default_config={},
             study_name='study',
             direction='minimize',
             minimization_key='roc_auc',
