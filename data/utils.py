@@ -197,7 +197,7 @@ def experiment(config,use_wandb=True,wandb_project='project',wandb_config={},**k
 
     # Save model
     path = osp.join(log_dir,'model.pt')
-    torch.save(model,path,map_location='cpu')
+    torch.save(model,path)
 
     # Test model
     test_val  = test(
