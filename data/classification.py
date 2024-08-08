@@ -519,15 +519,15 @@ def get_lambda_mass_fit(
     def myflatten(some_array):
         new_array = []
         for el in some_array:
-            if type(el[0])==ak.Array or type(el[0])==list:
+            if type(el[0])==torch.tensor or type(el[0])==list:
                 for sub_el in el:
-                    new_array.append(sub_el)
+                    new_array.append(sub_el.cpu().tolist())
             else:
-                new_array.append(el)
+                new_array.append(el.cpu().tolist())
         return new_array
 
     # Flatten events with more than one set of kinematics and convert to numpy arrays
-    kins = np.array(myflatten(kins))
+    kins = torch.tensor(myflatten(kins))
 
     # Create fit functions
     def func(x, N, beta, m, loc, scale, A, B, C):
