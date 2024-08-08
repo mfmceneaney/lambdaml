@@ -213,10 +213,27 @@ def experiment(config,use_wandb=True,wandb_project='project',wandb_config={},**k
 
     return test_val, apply_val
 
-def optimize(opt_par_config,default_config,study_name='study',direction='minimize',minimization_key='roc_auc',load_if_exists=True,ntrials=100,timeout=864000,gc_after_trial=True):
+def optimize(
+            opt_par_config={},
+            use_wandb=True,
+            wandb_project='project',
+            wandb_config={},
+            default_config,
+            study_name='study',
+            direction='minimize',
+            minimization_key='roc_auc',
+            load_if_exists=True,
+            ntrials=100,
+            timeout=864000,
+            gc_after_trial=True,
+            **kwargs
+            ):
     """
-    :param: opt_config
-    :param: opt_par_lims
+    :param: opt_par_config
+        :description: Configuration dictionary with structure {opt_par_name:{'lims':[opt_par_min,opt_par_max], 'log':False}}
+    :param: use_wandb
+    :param: wandb_project
+    :param: wandb_config
     :param: default_config
     :param: study_name
     :param: direction
@@ -231,20 +248,30 @@ def optimize(opt_par_config,default_config,study_name='study',direction='minimiz
 
         trial_config = default_config.copy() #NOTE: COPY IS IMPORTANT HERE!
 
-        #TODO: Suggest trial params and substitute into trial_config also set log dir name with trial param of objective
-        for opt_par_name in opt_par_config:
+        # Suggest trial params and substitute into trial_config also set log dir name with trial param of objective
+        log_dir = wandb_project+'___'
+        for idx, opt_par_name in enumerate(opt_par_config):
             lims = opt_par_config[opt_par]['lims']
             if len(lims)!=2:
                 raise TypeError("opt_par_config limits must be length 2 but opt_par_config[",opt_par,"]['lims'] has length",len(lims))
             log  = opt_par_config[opt_par]['log']
             if type(lims[0])==int:
                 trial.suggest_int(opt_par_name,lims[0],lims[1],log=log)
-            elif: type(lims[0])==float:
+            elif type(lims[0])==float:
                 trial.suggest_float(opt_par_name,lims[0],lims[1],log=log)
             trial_config[opt_par] = trial_opt_par
+            trial_log_dir += '_'.join([opt_par_name,str(trial_opt_par)])
+            if idx<len(opt_par_config)-1: trial_log_dir += '__'
+        trial_config['log_dir'] = log_dir
 
-        experiment_val = experiment(trial_config)
-        optimization_value = experiment_val[0][minimization_key]#TODO: Get roc_auc from experiment values
+        experiment_val = experiment(
+            trial_config,
+            use_wandb=use_wandb,
+            wandb_project=project,
+            wandb_config=wandb_config,
+            **kwargs
+        )
+        optimization_value = experiment_val[0][minimization_key]#NOTE: Get roc_auc from experiment testing values #TODO: Add option for setting index here so can select based on application values
 
         return 1.0-optimization_value if minimization_key=='roc_auc' else optimization_value #NOTE: #TODO: CHANGE THIS FROM BEING HARD-CODED
 
