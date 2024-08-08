@@ -3,13 +3,12 @@
 #----------------------------------------------------------------------#
 
 import torch
-import torch_geometric
-from torch.nn import Linear, BatchNorm1d
-import torch.nn.functional as F
-from torch_geometric.nn import MLP, GCNConv, GINConv, GraphConv, global_add_pool, global_mean_pool,  global_max_pool
+from torch.nn import Module, Sequential, Linear, ModuleList, BatchNorm1d, Dropout, ReLU, Softmax
+from torch.nn.functional import relu
+from torch_geometric.nn import MLP, GCNConv, GINConv, GraphConv, MessagePassing, knn_graph, global_add_pool, global_mean_pool,  global_max_pool
 from torch_geometric.nn.norm import GraphNorm, BatchNorm
 
-class GCN(torch.nn.Module):
+class GCN(Module):
     def __init__(
                     self,
                     in_channels=7,
@@ -30,9 +29,9 @@ class GCN(torch.nn.Module):
         self.lin1 = Linear(hidden_channels, hidden_channels)
         self.lin2 = Linear(hidden_channels, hidden_channels)
         self.lin3 = Linear(hidden_channels, out_channels)
-        self.bn1 = torch_geometric.nn.norm.GraphNorm(hidden_channels)
-        self.bn2 = torch_geometric.nn.norm.GraphNorm(hidden_channels)
-        self.bn3 = torch_geometric.nn.norm.GraphNorm(hidden_channels)
+        self.bn1 = GraphNorm(hidden_channels)
+        self.bn2 = GraphNorm(hidden_channels)
+        self.bn3 = GraphNorm(hidden_channels)
 
         # Set parameters
         self.in_channels = in_channels
@@ -40,7 +39,7 @@ class GCN(torch.nn.Module):
         self.gnn_conv = gnn_conv
         self.conv = GCNConv if self.gnn_conv == 'GCNConv' else GraphConv
         self.gnn_norm = gnn_norm
-        self.norm = GraphNorm if self.gnn_conv == 'GraphNorm' else BatchNorm
+        self.norm = GraphNorm if self.gnn_norm == 'GraphNorm' else BatchNorm
         self.head_num_mlp_layers = head_num_mlp_layers
         self.head_mlp_hidden_dim = head_mlp_hidden_dim
         self.head_norm = head_norm
@@ -49,8 +48,8 @@ class GCN(torch.nn.Module):
         self.out_channels = out_channels
 
         # Set GNN and normalization layers
-        self.convs = torch.nn.ModuleList()
-        self.norms = torch.nn.ModuleList()
+        self.convs = ModuleList()
+        self.norms = ModuleList()
         for idx in range(self.gnn_num_layers - 1):
             layers = [self.gnn_mlp_hidden_dim for i in range(2)]
             if idx==0:
@@ -80,7 +79,7 @@ class GCN(torch.nn.Module):
 
         return x
 
-class GIN(torch.nn.Module):
+class GIN(Module):
     def __init__(
                     self,
                     in_channels = 7,
@@ -117,8 +116,8 @@ class GIN(torch.nn.Module):
         self.pool = global_add_pool if pool=='sum' else global_mean_pool if pool=='mean' else global_max_pool
 
         # Set GNN layers
-        self.convs = torch.nn.ModuleList()
-        self.bns   = torch.nn.ModuleList()
+        self.convs = ModuleList()
+        self.bns   = ModuleList()
         for idx in range(self.gnn_num_layers - 1):
             mlp_layers = [self.gnn_mlp_hidden_dim for i in range(self.gnn_num_mlp_layers-1)]
             if idx==0:
@@ -130,7 +129,7 @@ class GIN(torch.nn.Module):
             self.bns.append(BatchNorm1d(self.gnn_mlp_hidden_dim))
 
         # Set MLP head layers, one mlp for each GNN layer AND the original graph
-        self.mlps = torch.nn.ModuleList()
+        self.mlps = ModuleList()
         for idx in range(self.gnn_num_layers): #NOTE: INPUT DIM FOR MLP LAYER HAS TO MATCH INPUT DIM FOR EACH GRAPH REPRESENTATION IN EACH LAYER HERE
             mlp_layers = [self.head_mlp_hidden_dim for i in range(self.head_num_mlp_layers-2)]
             mlp_layers.append(out_channels)
@@ -145,7 +144,7 @@ class GIN(torch.nn.Module):
         for i in range(self.gnn_num_layers - 1):
             x = self.convs[i](x, edge_index)
             x = self.bns[i](x)
-            x = torch.nn.functional.relu(x)
+            x = relu(x)
             hidden_rep.append(x)
 
         # Aggregate over graph representations from different GNN layers
@@ -157,19 +156,19 @@ class GIN(torch.nn.Module):
 
         return score_over_layer
 
-class ParticleStaticEdgeConv(torch_geometric.nn.MessagePassing):
+class ParticleStaticEdgeConv(MessagePassing):
     def __init__(self, in_channels, out_channels):
         super(ParticleStaticEdgeConv, self).__init__(aggr='max')
-        self.mlp = torch.nn.Sequential(
-            torch.nn.Linear(2 * in_channels, out_channels[0], bias=False),
-            torch_geometric.nn.BatchNorm(out_channels[0]), 
-            torch.nn.ReLU(),
-            torch.nn.Linear(out_channels[0], out_channels[1], bias=False),
-            torch_geometric.nn.BatchNorm(out_channels[1]),
-            torch.nn.ReLU(),
-            torch.nn.Linear(out_channels[1], out_channels[2], bias=False),
-            torch_geometric.nn.BatchNorm(out_channels[2]),
-            torch.nn.ReLU()
+        self.mlp = Sequential(
+            Linear(2 * in_channels, out_channels[0], bias=False),
+            BatchNorm(out_channels[0]), 
+            ReLU(),
+            Linear(out_channels[0], out_channels[1], bias=False),
+            BatchNorm(out_channels[1]),
+            ReLU(),
+            Linear(out_channels[1], out_channels[2], bias=False),
+            BatchNorm(out_channels[2]),
+            ReLU()
         )
 
     def forward(self, x, edge_index, k):
@@ -190,20 +189,20 @@ class ParticleDynamicEdgeConv(ParticleStaticEdgeConv):
     def __init__(self, in_channels, out_channels, k=7):
         super(ParticleDynamicEdgeConv, self).__init__(in_channels, out_channels)
         self.k = k
-        self.skip_mlp = torch.nn.Sequential(
-            torch.nn.Linear(in_channels, out_channels[2], bias=False),
-            torch_geometric.nn.BatchNorm(out_channels[2]),
+        self.skip_mlp = Sequential(
+            Linear(in_channels, out_channels[2], bias=False),
+            BatchNorm(out_channels[2]),
         )
-        self.act = torch.nn.ReLU()
+        self.act = ReLU()
 
     def forward(self, pts, fts, batch=None):
-        edges = torch_geometric.nn.knn_graph(pts, self.k, batch, loop=False, flow=self.flow)
+        edges = knn_graph(pts, self.k, batch, loop=False, flow=self.flow)
         aggrg = super(ParticleDynamicEdgeConv, self).forward(fts, edges, self.k)
         x = self.skip_mlp(fts)
         out = torch.add(aggrg, x)
         return self.act(out)
 
-class ParticleNet(torch.nn.Module):
+class ParticleNet(Module):
 
     def __init__(
         self,
@@ -225,28 +224,28 @@ class ParticleNet(torch.nn.Module):
         super().__init__()
         previous_output_shape = settings['input_features']
 
-        self.input_bn = torch_geometric.nn.BatchNorm(settings['input_features'])
+        self.input_bn = BatchNorm(settings['input_features'])
 
-        self.conv_process = torch.nn.ModuleList()
+        self.conv_process = ModuleList()
         for layer_idx, layer_param in enumerate(settings['conv_params']):
             K, channels = layer_param
             self.conv_process.append(ParticleDynamicEdgeConv(previous_output_shape, channels, k=K).to(settings['device']))#NOTE: Originally : .to(DEVICE)
             previous_output_shape = channels[-1]
 
-        self.fc_process = torch.nn.ModuleList()
+        self.fc_process = ModuleList()
         for layer_idx, layer_param in enumerate(settings['fc_params']):
             drop_rate, units = layer_param
-            seq = torch.nn.Sequential(
-                torch.nn.Linear(previous_output_shape, units),
-                torch.nn.Dropout(p=drop_rate),
-                torch.nn.ReLU()
+            seq = Sequential(
+                Linear(previous_output_shape, units),
+                Dropout(p=drop_rate),
+                ReLU()
             ).to(settings['device'])#NOTE: Originally : .to(DEVICE)
             self.fc_process.append(seq)
             previous_output_shape = units
 
 
-        self.output_mlp_linear = torch.nn.Linear(previous_output_shape, settings['output_classes'])
-        # self.output_activation = torch.nn.Softmax(dim=1)
+        self.output_mlp_linear = Linear(previous_output_shape, settings['output_classes'])
+        # self.output_activation = Softmax(dim=1)
 
     def forward(self, batch):
         fts = self.input_bn(batch.x)
@@ -256,7 +255,7 @@ class ParticleNet(torch.nn.Module):
             fts = layer(pts, fts, batch.batch)
             pts = fts
 
-        x = torch_geometric.nn.global_mean_pool(fts, batch.batch)
+        x = global_mean_pool(fts, batch.batch)
 
         for layer in self.fc_process:
             x = layer(x)
