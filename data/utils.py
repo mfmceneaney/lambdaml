@@ -213,11 +213,18 @@ def experiment(config,use_wandb=True,wandb_project='project',wandb_config={},**k
 
     return test_val, apply_val
 
-def optimize(opt_par_lims,default_config,study_name='study',direction='minimize',):
+def optimize(opt_par_config,default_config,study_name='study',direction='minimize',minimization_key='roc_auc',load_if_exists=True,ntrials=100,timeout=864000,gc_after_trial=True):
     """
     :param: opt_config
     :param: opt_par_lims
     :param: default_config
+    :param: study_name
+    :param: direction
+    :param: minimization_key
+    :param: load_if_exists
+    :param: ntrials
+    :param: timeout
+    :param: gc_after_trial
     """
 
     def objective(trial):
@@ -225,11 +232,21 @@ def optimize(opt_par_lims,default_config,study_name='study',direction='minimize'
         trial_config = default_config.copy() #NOTE: COPY IS IMPORTANT HERE!
 
         #TODO: Suggest trial params and substitute into trial_config also set log dir name with trial param of objective
+        for opt_par_name in opt_par_config:
+            lims = opt_par_config[opt_par]['lims']
+            if len(lims)!=2:
+                raise TypeError("opt_par_config limits must be length 2 but opt_par_config[",opt_par,"]['lims'] has length",len(lims))
+            log  = opt_par_config[opt_par]['log']
+            if type(lims[0])==int:
+                trial.suggest_int(opt_par_name,lims[0],lims[1],log=log)
+            elif: type(lims[0])==float:
+                trial.suggest_float(opt_par_name,lims[0],lims[1],log=log)
+            trial_config[opt_par] = trial_opt_par
 
         experiment_val = experiment(trial_config)
-        roc_auc = experiment_val[1]['roc_auc']#TODO: Get roc_auc from experiment values
+        optimization_value = experiment_val[0][minimization_key]#TODO: Get roc_auc from experiment values
 
-        return 1.0-roc_auc
+        return 1.0-optimization_value if minimization_key=='roc_auc' else optimization_value #NOTE: #TODO: CHANGE THIS FROM BEING HARD-CODED
 
     # Load or create pruner, sampler, and study
     pruner = optuna.pruners.MedianPruner() if opt_config['pruning'] else optuna.pruners.NopPruner() #TODO: Add CLI options for other pruners
@@ -240,7 +257,7 @@ def optimize(opt_par_lims,default_config,study_name='study',direction='minimize'
         pruner=pruner,
         study_name=study_name,
         direction=direction,
-        load_if_exists=True
+        load_if_exists=load_if_exists,
     ) #TODO: Add options for different SQL programs: Postgre, MySQL, etc.
 
     # Run optimization
@@ -248,5 +265,5 @@ def optimize(opt_par_lims,default_config,study_name='study',direction='minimize'
         objective,
         n_trials=n_trials,
         timeout=timeout,
-        gc_after_trial=True
+        gc_after_trial=gc_after_trial
     ) #NOTE: gc_after_trial=True is to avoid OOM errors see https://optuna.readthedocs.io/en/stable/faq.html#out-of-memory-gc-collect
