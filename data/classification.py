@@ -339,7 +339,7 @@ def get_binary_classification_metrics(
             title='Separated output distributions',
             xlabel='NN output',
             nbins=50,
-            low=-1.1,
+            low=-0.1,
             high=1.1,
             logy=True,
             figsize=(16,10)
