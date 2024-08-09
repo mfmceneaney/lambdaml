@@ -5,10 +5,10 @@
 import torch
 from torch.nn.functional import softmax
 from sklearn.metrics import confusion_matrix, roc_auc_score, roc_curve
-import seaborn as sns
 import numpy as np
 import awkward as ak
 import matplotlib.pyplot as plt
+import plotly.express as px
 import scipy.optimize as opt
 from scipy.stats import crystalball
 import scipy.integrate as integrate#TODO: ORGANIZE IMPORTS
@@ -185,28 +185,40 @@ def plot_data_separated(
 
     :return: f1, f2
     """
-    
-    # Plot signal distributions
-    f1 = plt.figure(figsize=figsize)
-    plt.title(title)
-    plt.hist(sg_true, color='tab:red', alpha=0.5, range=(low,high), bins=nbins, histtype='stepfilled', density=False, label='True Signal')
-    plt.hist(sg_false, color='tab:orange', alpha=0.5, range=(low,high), bins=nbins, histtype='stepfilled', density=False, label='False Signal')
-    plt.legend(loc='upper left', frameon=False)
-    plt.ylabel('Counts')
-    plt.xlabel(xlabel)
-    if logy: plt.yscale('log')
 
-    # Plot signal and background distributions
-    f2 = plt.figure(figsize=figsize)
-    plt.title(title)
-    plt.hist(sg_true, color='tab:red', alpha=0.5, range=(low,high), bins=nbins, histtype='stepfilled', density=False, label='True Signal')
-    plt.hist(sg_false, color='tab:orange', alpha=0.5, range=(low,high), bins=nbins, histtype='stepfilled', density=False, label='False Signal')
-    plt.hist(bg_false, color='tab:green', alpha=0.5, range=(low,high), bins=nbins, histtype='stepfilled', density=False, label='False Background')
-    plt.hist(bg_true, color='tab:blue', alpha=0.5, range=(low,high), bins=nbins, histtype='stepfilled', density=False, label='True Background')
-    plt.legend(loc='upper left', frameon=False)
-    plt.ylabel('Counts')
-    plt.xlabel(xlabel)
-    if logy: plt.yscale('log')
+    # Set plotting parameters
+    label1 = 'True Signal'
+    label2 = 'False Signal'
+    c1 = [label1 for i in range(len(sg_true))]
+    c2 = [label2 for i in range(len(sg_false))]
+    opacity = 0.5
+
+    # Plot histograms
+    df = {
+        'x':[*sg_true,*sg_false],
+        'Distribution':[*c1,*c2]
+    }
+    labels={'x':xlabel}
+    f1 = px.histogram(df, x='x',nbins=nbins ,color='Distribution', title=title, labels=labels, opacity=0.5, range_x=(low,high), barmode="overlay", log_y=logy)
+
+    # Set plotting parameters
+    label1 = 'True Signal'
+    label2 = 'False Signal'
+    label3 = 'False Background'
+    label4 = 'True Background'
+    c1 = [label1 for i in range(len(sg_true))]
+    c2 = [label2 for i in range(len(sg_false))]
+    c3 = [label3 for i in range(len(bg_false))]
+    c4 = [label4 for i in range(len(bg_true))]
+    opacity = 0.5
+
+    # Plot histograms
+    df = {
+        'x':[*sg_true,*sg_false,*bg_false,*bg_true],
+        'Distribution':[*c1,*c2,*c3,*c4]
+    }
+    labels={'x':xlabel}
+    f2 = px.histogram(df, x='x',nbins=nbins ,color='Distribution', title=title, labels=labels, opacity=0.5, range_x=(low,high), barmode="overlay", log_y=logy)
 
     return f1, f2
 
@@ -236,16 +248,21 @@ def plot_data_sg_bg(
 
     :return: f1
     """
-    
-    # Plot signal and bg distributions
-    f1 = plt.figure(figsize=figsize)
-    plt.title(title)
-    plt.hist(array_sg, color='tab:red', alpha=0.5, range=(low,high), bins=nbins, histtype='stepfilled', density=False, label='Signal')
-    plt.hist(array_bg, color='tab:orange', alpha=0.5, range=(low,high), bins=nbins, histtype='stepfilled', density=False, label='Background')
-    plt.legend(loc='upper left', frameon=False)
-    plt.ylabel('Counts')
-    plt.xlabel(xlabel)
-    if logy: plt.yscale('log')
+
+    # Set plotting parameters
+    label1 = 'Signal'
+    label2 = 'Background'
+    c1 = [label1 for i in range(len(array_sg))]
+    c2 = [label2 for i in range(len(array_bg))]
+    opacity = 0.5
+
+    # Plot histograms
+    df = {
+        'x':[*array_sg,*array_bg],
+        'Distribution':[*c1,*c2]
+    }
+    labels={'x':xlabel}
+    f1 = px.histogram(df, x='x',nbins=nbins ,color='Distribution', title=title, labels=labels, opacity=0.5, range_x=(low,high), barmode="overlay", log_y=logy)
 
     return f1
 
@@ -299,8 +316,12 @@ def get_binary_classification_metrics(
         # Plot heatmap of confusion matrix
         classes = ['bg', 'sig']
         title = "Confusion Matrix"
-        confusion_matrix_plot = sns.heatmap(cm, cmap="Blues", annot=True, xticklabels=classes, yticklabels=classes, cbar=False)
-        confusion_matrix_plot.set(title=title, xlabel="Predicted label", ylabel="True label")
+        confusion_matrix_plot = px.imshow(
+                                        cm, 
+                                        labels=dict(x="Predicted label", y="True label", color="Number"),
+                                        text_auto=True
+                                )
+        confusion_matrix_plot.update_xaxes(side="bottom")
         plots['confusion_matrix_plot'] = confusion_matrix_plot
 
         # Separate outputs of model
