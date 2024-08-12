@@ -9,6 +9,7 @@ import numpy as np
 import awkward as ak
 import matplotlib.pyplot as plt
 import plotly.express as px
+import plotly.graph_objects as go
 import scipy.optimize as opt
 from scipy.stats import crystalball
 import scipy.integrate as integrate#TODO: ORGANIZE IMPORTS
@@ -615,12 +616,31 @@ def get_lambda_mass_fit(
     plt.ylabel('Counts')
     plt.xlabel('Invariant mass (GeV)')
 
+    # Create plotly plot
+    trace1 = go.Histogram(x=masses, nbinsx=bins, name='Signal',opacity=0.5)
+    trace2 = go.Scatter(x=x, y=func(x, *optParams), mode='lines', name='Fit function')
+    trace3 = go.Scatter(x=x, y=sig(x, *optParams[0:5]), mode='lines', name='Signal fit')
+    trace4 = go.Scatter(x=x, y=bg(x, *optParams[5:]), mode='lines', name='Background fit')
+    trace5 = go.Histogram(x=x, y=y-bg(x, *optParams[5:]), nbinsx=bins, name='Signal', opacity=0.5)
+    
+    fig = go.Figure()
+    fig.add_trace(trace1)
+    fig.add_trace(trace2)
+    fig.add_trace(trace3)
+    fig.add_trace(trace4)
+    fig.add_trace(trace5)
+    fig.update_layout(barmode='overlay')
+    fig['layout'].update(height=500, width=800, title='Separated mass distribution', xaxis={"tickangle":0},
+        xaxis_title='Invariant Mass (GeV)',
+        yaxis_title='Counts'
+    )
+
     # Compute true S, B, N, FOM, purity values if truth is given
     if true_labels is not None:
         pass#TODO! Compute and plot true signal hist???
 
     return { #TODO: Return f, resultsN, resultS, resultB, integral_bghist, integral_tothist, fom, purity, ... true values in signal region
-        'massfit_plot':f,
+        'massfit_plot':fig,
         'resultN':resultN,
         'resultS':resultS,
         'resultB':resultB,
