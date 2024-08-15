@@ -201,7 +201,6 @@ def main(
             "epochs": epochs,
             "num_workers": num_workers,
             "max_files": max_files,
-            **model_params,
             **trial_config
         }
 
@@ -256,6 +255,8 @@ if __name__=="__main__":
                         help='Number of workers processes for dataloaders')
     parser.add_argument('--max_files', type=int, default=0,
                         help='Maximum number of files to use from dataset')
+    parser.add_argument('--shuffle', action='store_true',
+                        help='Shuffle training dataset after each epoch')
     parser.add_argument('--use_weighted_samplers', action='store_true',
                         help='Use weighted samplers instead of loss weighting for imbalanced datasets')
     parser.add_argument('--epochs', type=int, default=100,
@@ -276,7 +277,7 @@ if __name__=="__main__":
                         help='Optuna study maximum number of trials')
     parser.add_argument('--timeout', type=int, default=864000,
                         help='Optuna study maximum time for project to complete')
-     parser.add_argument('--gc_after_trial', action='store_true',
+    parser.add_argument('--gc_after_trial', action='store_true',
                         help='Optuna study run garbage collection after each trial')
     parser.add_argument('--log_dir', type=str, default='./',
                         help='Log directory path')
