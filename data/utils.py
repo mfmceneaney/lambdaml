@@ -8,9 +8,6 @@ import torch
 # Logging
 import wandb
 
-# Optimization
-import optuna
-
 # Miscellaneous
 import os.path as osp
 from tqdm import tqdm
