@@ -226,10 +226,10 @@ def main(
     #----- Run optimize with the optuna framework -----#
 
     # Load or create pruner, sampler, and study
-    pruner = optuna.pruners.MedianPruner() if trial_config['pruning'] else optuna.pruners.NopPruner() #TODO: Add CLI options for other pruners
+    pruner = optuna.pruners.MedianPruner() if pruning else optuna.pruners.NopPruner() #TODO: Add CLI options for other pruners
     sampler = TPESampler() #TODO: Add command line option for selecting different sampler types.
     study = optuna.create_study(
-        storage='sqlite:///'+trial_config['db_path'],
+        storage='sqlite:///'+db_path,
         sampler=sampler,
         pruner=pruner,
         study_name=study_name,
