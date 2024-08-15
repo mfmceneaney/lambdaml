@@ -11,6 +11,7 @@ from torch.utils.data import WeightedRandomSampler
 from torch.nn import CrossEntropyLoss
 import optuna
 from optuna.samplers import TPESampler
+import os
 
 # Local imports
 from data import static_split, CustomDataset
