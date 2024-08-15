@@ -242,7 +242,7 @@ def main(
     # Run optimization
     study.optimize(
         objective,
-        n_trials=n_trials,
+        n_trials=ntrials,
         timeout=timeout,
         gc_after_trial=gc_after_trial
     ) #NOTE: gc_after_trial=True is to avoid OOM errors see https://optuna.readthedocs.io/en/stable/faq.html#out-of-memory-gc-collect
