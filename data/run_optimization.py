@@ -223,12 +223,13 @@ def main(
 
         return 1.0-optimization_value if minimization_key=='roc_auc' else optimization_value #NOTE: #TODO: CHANGE THIS FROM BEING HARD-CODED
 
-    # Run optimize with the optuna framework
+    #----- Run optimize with the optuna framework -----#
+
     # Load or create pruner, sampler, and study
-    pruner = optuna.pruners.MedianPruner() if opt_par_config['pruning'] else optuna.pruners.NopPruner() #TODO: Add CLI options for other pruners
+    pruner = optuna.pruners.MedianPruner() if trial_config['pruning'] else optuna.pruners.NopPruner() #TODO: Add CLI options for other pruners
     sampler = TPESampler() #TODO: Add command line option for selecting different sampler types.
     study = optuna.create_study(
-        storage='sqlite:///'+opt_par_config['db_path'],
+        storage='sqlite:///'+trial_config['db_path'],
         sampler=sampler,
         pruner=pruner,
         study_name=study_name,
