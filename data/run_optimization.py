@@ -132,7 +132,7 @@ def main(
 
         # Set additional optuna arguments in trial_config
         trial_config['db_path'] = db_path
-        trial_config['pruing']  = pruning
+        trial_config['pruning']  = pruning
 
         # Create dataloaders
         dl_labelled_train   = DataLoader(ds_labelled_train, sampler=sl_labelled_train, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
