@@ -287,7 +287,7 @@ if __name__=="__main__":
 
     # Get optimization configuration from yaml file
     opt_par_config = {}
-    with open(yaml_path) as f:
+    with open(args.opt_par_config_path) as f:
         opt_par_config = yaml.safe_load(f)
 
     # Run
