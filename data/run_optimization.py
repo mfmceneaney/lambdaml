@@ -22,6 +22,7 @@ def main(
         lengths_unlabelled=None,
         num_workers=0,
         max_files=0,
+        shuffle=False, #NOTE: Set this to false for very large datasets for now
         use_weighted_samplers=False,
         epochs=100,
         opt_par_config={},
@@ -44,6 +45,7 @@ def main(
     :param: lengths_unlabelled
     :param: num_workers
     :param: max_files
+    :param: shuffle
     :param: use_weighted_samplers
     :param: epochs
     :param: opt_par_config
@@ -58,127 +60,182 @@ def main(
     :param: log_dir
     """
 
-    # Select device
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    
-    # Create datasets
-    ds_labelled = CustomDataset(
-            root_labelled,
-            transform=None,
-            pre_transform=None,
-            pre_filter=None,
-            max_files=max_files,
+    def objective(trial):
+
+        # Select device
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        
+        # Create datasets
+        ds_labelled = CustomDataset(
+                root_labelled,
+                transform=None,
+                pre_transform=None,
+                pre_filter=None,
+                max_files=max_files,
+            )
+        ds_unlabelled = CustomDataset(
+                root_unlabelled,
+                transform=None,
+                pre_transform=None,
+                pre_filter=None,
+                max_files=max_files,
+            )
+
+        # Split datasets
+        ds_labelled_train, ds_labelled_val, ds_labelled_test = static_split(ds_labelled,lengths_labelled)
+
+        # Create samplers if requested
+        sl_labelled_train     = None
+        sl_labelled_val       = None
+        if use_weighted_samplers:
+            _, train_counts = np.unique(ds_labelled_train.y, return_counts=True)
+            train_weights = [1/train_counts[i] for i in ds_labelled_train.y]
+            train_sampler = WeightedRandomSampler(weights=train_weights, num_samples=len(ds_labelled_train), replacement=True)
+            _, val_counts = np.unique(ds_labelled_val.y, return_counts=True)
+            val_weights = [1/val_counts[i] for i in ds_labelled_val.y]
+            val_sampler = WeightedRandomSampler(weights=val_weights, num_samples=len(ds_labelled_val), replacement=True)
+
+        trial_config = {} #NOTE: COPY IS IMPORTANT HERE!
+
+        # Suggest trial params and substitute into trial_config also set log dir name with trial param of objective
+        for idx, opt_par_name in enumerate(opt_par_config):
+            lims = opt_par_config[opt_par]['lims']
+            if len(lims)!=2:
+                raise TypeError("opt_par_config limits must be length 2 but opt_par_config[",opt_par,"]['lims'] has length",len(lims))
+            log = opt_par_config[opt_par]['log']
+            trial_opt_par = None
+            if type(lims[0])==int:
+                trial_opt_par = trial.suggest_int(opt_par_name,lims[0],lims[1],log=log)
+            elif type(lims[0])==float:
+                trial_opt_par = trial.suggest_float(opt_par_name,lims[0],lims[1],log=log)
+            trial_config[opt_par] = trial_opt_par
+
+        # Set trial number so this gets passed to wandb
+        trial_config['trial_number'] = trial.number
+
+        # Create output directory if it does not exist
+        trial_log_dir = os.path.abspath(log_dir)+"/trial_"+str(trial.number)
+        if not os.path.isdir(trial_log_dir):
+            try:
+                os.makedirs(trial_log_dir) #NOTE: Do NOT use os.path.join() here since it requires that the directory exist.
+            except Exception:
+                if verbose: print("Could not create output directory:",trial_log_dir)
+        trial_config['log_dir'] = trial_log_dir
+
+        # Set learning rate optimizer and dataloader batch size parameters
+        lr = trial_config['lr'] if 'lr' in trial_config.keys() else 1e-3
+        batch_size = trial_config['batch_size'] if 'batch_size' in trial_config.keys() else 16
+
+        # Create dataloaders
+        dl_labelled_train   = DataLoader(ds_labelled_train, sampler=sl_labelled_train, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
+        dl_labelled_val     = DataLoader(ds_labelled_val, sampler=sl_labelled_val, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+        dl_labelled_test    = DataLoader(ds_labelled_test, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+        dl_unlabelled_apply = DataLoader(ds_unlabelled, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+
+        # Create model #TODO: Could load args from yaml so easily configurable
+        model_params = {
+                'in_channels': 7, #ds_labelled_train.num_node_features,
+                'gnn_num_layers': 4,
+                'gnn_num_mlp_layers': 3,
+                'gnn_mlp_hidden_dim': 128,
+                'gnn_mlp_norm': 'batch_norm',
+                'gnn_mlp_act': 'relu',
+                'train_epsilon': False,
+                'head_num_mlp_layers': 3,
+                'head_mlp_hidden_dim':  128,
+                'head_norm': None,
+                'head_act': 'relu',
+                'dropout': 0.5,
+                'out_channels': 2, #ds_labelled_train.num_classes,
+                'pool': 'max',
+        }
+        #NOTE: RESET MODEL PARAMS IF NAME GIVEN IN TRIAL_CONFIG ELSE SET TO DEFAULT VALUE IN TRIAL_CONFIG
+        for key in model_params:
+            if key in trial_config:
+                model_params[key] = trial_config[key]
+            else:
+                trial_config[key] = model_params[key]
+        model=GIN(
+            **model_params
+        ).to(device)
+
+        # Create optimizer
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr) #TODO: FIGURE OUT HOW TO GET THIS GUY IN OPTIMIZE...
+
+        # Create loss function with weights
+        data_labels    = ds_labelled.current_ds.y
+        unique, counts = np.unique(data_labels,return_counts=True)
+        weight_signal  = counts[1]/counts[0]
+        weight         = torch.FloatTensor([weight_signal, 1.0]).to(device)
+        criterion      = CrossEntropyLoss(weight=weight if not use_weighted_samplers else None,reduction='mean')
+
+        # Set miscellaneous parameters
+        scheduler  = None
+        kin_names  = ["idxe","idxp","idxpi","Q2","nu","W","x","y","z_ppim","xF_ppim","mass_ppim"]
+        kin_labels = ["idxe","idxp","idxpi","$Q^2$ (GeV$^2$)","$\\nu$","$W$ (GeV)","$x$","$y$","$z_{p\pi^{-}}","$x_{F p\pi^{-}}","$M_{p\pi^{-}}$ (GeV)"]
+
+        # Create config
+        config = {
+            "model": model,
+            "device": device,
+            "train_dataloader": dl_labelled_train,
+            "val_dataloader": dl_labelled_val,
+            "test_dataloader": dl_labelled_test,
+            "apply_dataloader": dl_unlabelled_apply,
+            "optimizer": optimizer,
+            "criterion": criterion,
+            "scheduler": scheduler,
+            "epochs": epochs,
+            "kin_names": kin_names,
+            "kin_labels": kin_labels,
+        }
+
+        wandb_config = {
+            "device": device,
+            "root_labelled": root_labelled,
+            "root_unlabelled": root_unlabelled,
+            "lengths_labelled": lengths_labelled,
+            "lengths_unlabelled": lengths_unlabelled,
+            "batch_size": batch_size,
+            "lr": lr,
+            "epochs": epochs,
+            "num_workers": num_workers,
+            "max_files": max_files,
+            **model_params,
+            **trial_config
+        }
+
+        experiment_val = experiment(
+            config,
+            use_wandb=use_wandb,
+            wandb_project=project,
+            wandb_config=wandb_config,
+            **kwargs
         )
-    ds_unlabelled = CustomDataset(
-            root_unlabelled,
-            transform=None,
-            pre_transform=None,
-            pre_filter=None,
-            max_files=max_files,
-        )
+        optimization_value = experiment_val[0][minimization_key]#NOTE: Get roc_auc from experiment testing values #TODO: Add option for setting index here so can select based on application values
 
-    # Split datasets
-    ds_labelled_train, ds_labelled_val, ds_labelled_test = static_split(ds_labelled,lengths_labelled)
-
-    # Create samplers if requested
-    sl_labelled_train     = None
-    sl_labelled_val       = None
-    if use_weighted_samplers:
-        _, train_counts = np.unique(ds_labelled_train.y, return_counts=True)
-        train_weights = [1/train_counts[i] for i in train_dataset.y]
-        train_sampler = WeightedRandomSampler(weights=train_weights, num_samples=len(ds_labelled_train), replacement=True)
-        _, val_counts = np.unique(ds_labelled_val.y, return_counts=True)
-        val_weights = [1/val_counts[i] for i in ds_labelled_val.y]
-        val_sampler = WeightedRandomSampler(weights=val_weights, num_samples=len(ds_labelled_val), replacement=True)
-
-    # Create dataloaders
-    dl_labelled_train   = DataLoader(ds_labelled_train, sampler=sl_labelled_train, batch_size=batch_size, shuffle=True, num_workers=num_workers)
-    dl_labelled_val     = DataLoader(ds_labelled_val, sampler=sl_labelled_val, batch_size=batch_size, shuffle=False, num_workers=num_workers)
-    dl_labelled_test    = DataLoader(ds_labelled_test, batch_size=batch_size, shuffle=False, num_workers=num_workers)
-    dl_unlabelled_apply = DataLoader(ds_unlabelled, batch_size=batch_size, shuffle=False, num_workers=num_workers)
-
-    # Create model #TODO: Could load args from yaml so easily configurable
-    model_params = {
-            'in_channels': 7, #ds_labelled_train.num_node_features,
-            'gnn_num_layers': 4,
-            'gnn_num_mlp_layers': 3,
-            'gnn_mlp_hidden_dim': 128,
-            'gnn_mlp_norm': 'batch_norm',
-            'gnn_mlp_act': 'relu',
-            'train_epsilon': False,
-            'head_num_mlp_layers': 3,
-            'head_mlp_hidden_dim':  128,
-            'head_norm': None,
-            'head_act': 'relu',
-            'dropout': 0.5,
-            'out_channels': 2, #ds_labelled_train.num_classes,
-            'pool': 'max',
-    }
-    model=GIN(
-        **model_params
-    ).to(device)
-
-    # Create optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-
-    # Create loss function with weights
-    data_labels    = ds_labelled.current_ds.y
-    unique, counts = np.unique(data_labels,return_counts=True)
-    weight_signal  = counts[1]/counts[0]
-    weight         = torch.FloatTensor([weight_signal, 1.0]).to(device)
-    criterion      = CrossEntropyLoss(weight=weight if not use_weighted_samplers else None,reduction='mean')
-
-    # Set miscellaneous parameters
-    scheduler  = None
-    kin_names  = ["idxe","idxp","idxpi","Q2","nu","W","x","y","z_ppim","xF_ppim","mass_ppim"]
-    kin_labels = ["idxe","idxp","idxpi","$Q^2$ (GeV$^2$)","$\\nu$","$W$ (GeV)","$x$","$y$","$z_{p\pi^{-}}","$x_{F p\pi^{-}}","$M_{p\pi^{-}}$ (GeV)"]
-
-    # Create config
-    config = {
-        "model": model,
-        "device": device,
-        "train_dataloader": dl_labelled_train,
-        "val_dataloader": dl_labelled_val,
-        "test_dataloader": dl_labelled_test,
-        "apply_dataloader": dl_unlabelled_apply,
-        "optimizer": optimizer,
-        "criterion": criterion,
-        "scheduler": scheduler,
-        "epochs": epochs,
-        "kin_names": kin_names,
-        "kin_labels": kin_labels,
-    }
-
-    wandb_config = {
-        "device": device,
-        "root_labelled": root_labelled,
-        "root_unlabelled": root_unlabelled,
-        "lengths_labelled": lengths_labelled,
-        "lengths_unlabelled": lengths_unlabelled,
-        "batch_size": batch_size,
-        "lr": lr,
-        "epochs": epochs,
-        "num_workers": num_workers,
-        "max_files": max_files,
-        **model_params
-    }
+        return 1.0-optimization_value if minimization_key=='roc_auc' else optimization_value #NOTE: #TODO: CHANGE THIS FROM BEING HARD-CODED
 
     # Run optimize with the optuna framework
-    optimize(
-        config=config,
-        opt_par_config=opt_par_config,
-        use_wandb=use_wandb,
-        wandb_project=project,
-        wandb_config=wandb_config
-        study_name=project,
+    # Load or create pruner, sampler, and study
+    pruner = optuna.pruners.MedianPruner() if opt_config['pruning'] else optuna.pruners.NopPruner() #TODO: Add CLI options for other pruners
+    sampler = TPESampler() #TODO: Add command line option for selecting different sampler types.
+    study = optuna.create_study(
+        storage='sqlite:///'+opt_config['db_path'],
+        sampler=sampler,
+        pruner=pruner,
+        study_name=study_name,
         direction=direction,
-        minimization_key=minimization_key,
         load_if_exists=load_if_exists,
-        ntrials=ntrials,
+    ) #TODO: Add options for different SQL programs: Postgre, MySQL, etc.
+
+    # Run optimization
+    study.optimize(
+        objective,
+        n_trials=n_trials,
         timeout=timeout,
-        gc_after_trial=gc_after_trial,
-        log_dir=log_dir,
-        )
+        gc_after_trial=gc_after_trial
+    ) #NOTE: gc_after_trial=True is to avoid OOM errors see https://optuna.readthedocs.io/en/stable/faq.html#out-of-memory-gc-collect
 
 # Run script
 if __name__=="__main__":
