@@ -403,7 +403,7 @@ def get_binary_classification_metrics(
                     nbins=50,
                     low=np.min(kins[:,idx]), #TODO: Pass these from config above
                     high=np.max(kins[:,idx]),
-                    logy=True,
+                    logy=False,
                     figsize=(16,10)
                     )
                 plots[kin_name+'_sg'] = kin_sg
@@ -508,7 +508,7 @@ def get_binary_classification_metrics_nolabels(
                     nbins=50,
                     low=np.min(kins[:,idx]), #TODO: Pass these from config above
                     high=np.max(kins[:,idx]),
-                    logy=True,
+                    logy=False,
                     figsize=(16,10)
                     )
                 plots[kin_name+'_sg_and_bg'+identifier_key] = kin_sg_and_bg
