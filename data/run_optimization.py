@@ -35,6 +35,8 @@ def main(
         timeout=864000,
         gc_after_trial=True,
         log_dir="./",
+        db_path="./database.db",
+        pruning=False,
     ):
     """
     :description: Run an optuna optimization experiment training, testing, and applying a Lambda GNN model and suggesting new hyperparameters based on the selected optimization algorithm.
@@ -58,6 +60,8 @@ def main(
     :param: timeout
     :param: gc_after_trial
     :param: log_dir
+    :param: db_path
+    :param: pruning
     """
 
     def objective(trial):
@@ -125,6 +129,10 @@ def main(
         # Set learning rate optimizer and dataloader batch size parameters
         lr = trial_config['lr'] if 'lr' in trial_config.keys() else 1e-3
         batch_size = trial_config['batch_size'] if 'batch_size' in trial_config.keys() else 16
+
+        # Set additional optuna arguments in trial_config
+        trial_config['db_path'] = db_path
+        trial_config['pruing']  = pruning
 
         # Create dataloaders
         dl_labelled_train   = DataLoader(ds_labelled_train, sampler=sl_labelled_train, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
@@ -217,10 +225,10 @@ def main(
 
     # Run optimize with the optuna framework
     # Load or create pruner, sampler, and study
-    pruner = optuna.pruners.MedianPruner() if opt_config['pruning'] else optuna.pruners.NopPruner() #TODO: Add CLI options for other pruners
+    pruner = optuna.pruners.MedianPruner() if opt_par_config['pruning'] else optuna.pruners.NopPruner() #TODO: Add CLI options for other pruners
     sampler = TPESampler() #TODO: Add command line option for selecting different sampler types.
     study = optuna.create_study(
-        storage='sqlite:///'+opt_config['db_path'],
+        storage='sqlite:///'+opt_par_config['db_path'],
         sampler=sampler,
         pruner=pruner,
         study_name=study_name,
@@ -281,6 +289,10 @@ if __name__=="__main__":
                         help='Optuna study run garbage collection after each trial')
     parser.add_argument('--log_dir', type=str, default='./',
                         help='Log directory path')
+    parser.add_argument('--db_path', type=str, default='./database.db',
+                        help='Optuna sqlite3 database path')
+    parser.add_argument('--pruning', action='store_true',
+                        help='Optuna median pruning option')
 
     # Parse
     args = parser.parse_args()
@@ -298,6 +310,7 @@ if __name__=="__main__":
             lengths_unlabelled=args.lengths_unlabelled,
             num_workers=args.num_workers,
             max_files=args.max_files,
+            shuffle=args.shuffle,
             use_weighted_samplers=args.use_weighted_samplers, #TODO: Add this to args
             epochs=args.epochs,
             opt_par_config=opt_par_config,#TODO: load from yaml or just set to empty and if empty do some defaults? ... do you want to optimize batch and learning_rate????!?!?!?  That's going to be complicated given current code structure.
@@ -310,4 +323,6 @@ if __name__=="__main__":
             timeout=args.timeout,
             gc_after_trial=args.gc_after_trial,
             log_dir=args.log_dir,
+            db_path=args.db_path,
+            pruning=args.pruning,
         )
