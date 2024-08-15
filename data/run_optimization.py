@@ -234,7 +234,7 @@ def main(
         storage='sqlite:///'+db_path,
         sampler=sampler,
         pruner=pruner,
-        study_name=study_name,
+        study_name=project,
         direction=direction,
         load_if_exists=load_if_exists,
     ) #TODO: Add options for different SQL programs: Postgre, MySQL, etc.
