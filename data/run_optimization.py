@@ -4,8 +4,10 @@
 
 import argparse
 import numpy as np
+import yaml
 import torch
 from torch_geometric.loader import DataLoader
+from torch.utils.data import WeightedRandomSampler
 from torch.nn import CrossEntropyLoss
 
 # Local imports
@@ -18,15 +20,13 @@ def main(
         root_unlabelled="",
         lengths_labelled=[0.8,0.1,0.1],
         lengths_unlabelled=None,
-        batch_size=32,
-        lr=1e-3,
-        epochs=100,
-        use_wandb=True,
         num_workers=0,
         max_files=0,
+        use_weighted_samplers=False,
+        epochs=100,
+        opt_par_config={},
+        use_wandb=True,
         project='project',
-        opt_par_config={},#TODO: load from yaml or just set to empty and if empty do some defaults? ... do you want to optimize batch and learning_rate????!?!?!?  That's going to be complicated given current code structure.
-        study_name='study',
         direction='minimize',
         minimization_key='roc_auc',
         load_if_exists=True,
@@ -42,15 +42,13 @@ def main(
     :param: root_unlabelled
     :param: lengths_labelled
     :param: lengths_unlabelled
-    :param: batch_size
-    :param: lr
-    :param: epochs
-    :param: use_wandb
     :param: num_workers
     :param: max_files
-    :param: project
+    :param: use_weighted_samplers
+    :param: epochs
     :param: opt_par_config
-    :param: study_name
+    :param: use_wandb
+    :param: project
     :param: direction
     :param: minimization_key
     :param: load_if_exists
@@ -82,10 +80,16 @@ def main(
     # Split datasets
     ds_labelled_train, ds_labelled_val, ds_labelled_test = static_split(ds_labelled,lengths_labelled)
 
-    # Create samplers if requested #TODO!
-    use_weighted_samplers = False
+    # Create samplers if requested
     sl_labelled_train     = None
     sl_labelled_val       = None
+    if use_weighted_samplers:
+        _, train_counts = np.unique(ds_labelled_train.y, return_counts=True)
+        train_weights = [1/train_counts[i] for i in train_dataset.y]
+        train_sampler = WeightedRandomSampler(weights=train_weights, num_samples=len(ds_labelled_train), replacement=True)
+        _, val_counts = np.unique(ds_labelled_val.y, return_counts=True)
+        val_weights = [1/val_counts[i] for i in ds_labelled_val.y]
+        val_sampler = WeightedRandomSampler(weights=val_weights, num_samples=len(ds_labelled_val), replacement=True)
 
     # Create dataloaders
     dl_labelled_train   = DataLoader(ds_labelled_train, sampler=sl_labelled_train, batch_size=batch_size, shuffle=True, num_workers=num_workers)
@@ -162,12 +166,11 @@ def main(
     # Run optimize with the optuna framework
     optimize(
         config=config,
+        opt_par_config=opt_par_config,
         use_wandb=use_wandb,
         wandb_project=project,
         wandb_config=wandb_config
-        opt_par_config=opt_par_config,
-        default_config=default_config,
-        study_name=study_name,
+        study_name=project,
         direction=direction,
         minimization_key=minimization_key,
         load_if_exists=load_if_exists,
@@ -192,25 +195,42 @@ if __name__=="__main__":
                         help='Split fractions for labelled dataset')
     parser.add_argument('--lengths_unlabelled', type=float, default=None, nargs=3,
                         help='Split fractions for unlabelled dataset')
-    parser.add_argument('--batch_size', type=int, default=32,
-                        help='Batch size for dataloaders')
-    parser.add_argument('--learning_rate', type=float, default=1e-3,
-                        help='Learning rate for optimizer')
-    parser.add_argument('--epochs', type=int, default=100,
-                        help='Number of epochs for which to train')
-    parser.add_argument('--use_wandb', action='store_true',
-                        help='Log to WANDB')
     parser.add_argument('--num_workers', type=int, default=0,
                         help='Number of workers processes for dataloaders')
     parser.add_argument('--max_files', type=int, default=0,
                         help='Maximum number of files to use from dataset')
+    parser.add_argument('--use_weighted_samplers', action='store_true',
+                        help='Use weighted samplers instead of loss weighting for imbalanced datasets')
+    parser.add_argument('--epochs', type=int, default=100,
+                        help='Number of epochs for which to train')
+    parser.add_argument('--opt_par_config_path', type=str, default='opt_par_config.yaml',
+                        help='Path to optimization parameters yaml config file')
+    parser.add_argument('--use_wandb', action='store_true',
+                        help='Log to WANDB')
     parser.add_argument('--project', type=str, default='project',
                         help='WANDB project name')
+    parser.add_argument('--direction', type=str, default='minimize',
+                        help='Optuna study optimization direction')
+    parser.add_argument('--minimization_key', type=str, default='roc_auc',
+                        help='Optuna study minimization metric key')
+    parser.add_argument('--load_if_exists', action='store_true',
+                        help='Optuna study load if exists')
+    parser.add_argument('--ntrials', type=int, default=100,
+                        help='Optuna study maximum number of trials')
+    parser.add_argument('--timeout', type=int, default=864000,
+                        help='Optuna study maximum time for project to complete')
+     parser.add_argument('--gc_after_trial', action='store_true',
+                        help='Optuna study run garbage collection after each trial')
     parser.add_argument('--log_dir', type=str, default='./',
                         help='Log directory path')
 
     # Parse
     args = parser.parse_args()
+
+    # Get optimization configuration from yaml file
+    opt_par_config = {}
+    with open(yaml_path) as f:
+        opt_par_config = yaml.safe_load(f)
 
     # Run
     main(
@@ -218,12 +238,18 @@ if __name__=="__main__":
             root_unlabelled=args.ds_unlabelled,
             lengths_labelled=args.lengths_labelled,
             lengths_unlabelled=args.lengths_unlabelled,
-            batch_size=args.batch_size,
-            lr=args.learning_rate,
-            epochs=args.epochs,
-            use_wandb=args.use_wandb,
             num_workers=args.num_workers,
             max_files=args.max_files,
+            use_weighted_samplers=args.use_weighted_samplers, #TODO: Add this to args
+            epochs=args.epochs,
+            opt_par_config=opt_par_config,#TODO: load from yaml or just set to empty and if empty do some defaults? ... do you want to optimize batch and learning_rate????!?!?!?  That's going to be complicated given current code structure.
+            use_wandb=args.use_wandb,
             project=args.project,
+            direction=args.direction,
+            minimization_key=args.minimization_key,
+            load_if_exists=args.load_if_exists,
+            ntrials=args.ntrials,
+            timeout=args.timeout,
+            gc_after_trial=args.gc_after_trial,
             log_dir=args.log_dir,
         )
