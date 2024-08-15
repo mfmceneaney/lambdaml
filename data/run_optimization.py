@@ -199,6 +199,7 @@ def main(
             "epochs": epochs,
             "kin_names": kin_names,
             "kin_labels": kin_labels,
+            "log_dir": trial_log_dir,
         }
 
         wandb_config = {
@@ -220,7 +221,6 @@ def main(
             use_wandb=use_wandb,
             wandb_project=project,
             wandb_config=wandb_config,
-            **kwargs
         )
         optimization_value = experiment_val[0][minimization_key]#NOTE: Get roc_auc from experiment testing values #TODO: Add option for setting index here so can select based on application values
 
