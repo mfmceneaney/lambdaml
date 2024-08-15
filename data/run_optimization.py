@@ -105,16 +105,16 @@ def main(
 
         # Suggest trial params and substitute into trial_config also set log dir name with trial param of objective
         for idx, opt_par_name in enumerate(opt_par_config):
-            lims = opt_par_config[opt_par]['lims']
+            lims = opt_par_config[opt_par_name]['lims']
             if len(lims)!=2:
-                raise TypeError("opt_par_config limits must be length 2 but opt_par_config[",opt_par,"]['lims'] has length",len(lims))
-            log = opt_par_config[opt_par]['log']
+                raise TypeError("opt_par_config limits must be length 2 but opt_par_config[",opt_par_name,"]['lims'] has length",len(lims))
+            log = opt_par_config[opt_par_name]['log']
             trial_opt_par = None
             if type(lims[0])==int:
                 trial_opt_par = trial.suggest_int(opt_par_name,lims[0],lims[1],log=log)
             elif type(lims[0])==float:
                 trial_opt_par = trial.suggest_float(opt_par_name,lims[0],lims[1],log=log)
-            trial_config[opt_par] = trial_opt_par
+            trial_config[opt_par_name] = trial_opt_par
 
         # Set trial number so this gets passed to wandb
         trial_config['trial_number'] = trial.number
