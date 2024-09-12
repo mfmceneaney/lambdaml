@@ -157,6 +157,9 @@ def main(
     # Run experiment
     experiment(config,use_wandb=use_wandb,wandb_project=project,wandb_config=wandb_config)
 
+    # Save model
+    torch.save(model, os.path.join(log_dir,'model.pt'))
+
 # Run script
 if __name__=="__main__":
     
