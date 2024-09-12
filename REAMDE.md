@@ -2,11 +2,21 @@
 
 Graph Neural Networks (GNNs) for $\Lambda$ hyperon identification at [CLAS12](https://www.jlab.org/physics/hall-b/clas12).
 
-Required python modules (all available with pip) are listed in [requirements.txt](requirements.txt).
+
+## Installation
+
+Begin by cloning the repository
+```bash
+git clone https://github.com/mfmceneaney/lambdaml.git
+```
+Install the python modules.  These are listed in [requirements.txt](requirements.txt) and are all available with pip.
+```bash
+pip install requirements.txt
+```
 * Examples of creating datasets, training a model and running hyperparamter optimization are provided in [tutorials](tutorials/).
 * Notebook versions are in [tutorials/ipynb](tutorials/ipynb).
 
-## Creating a CUDA Virtual Environment
+### Creating a CUDA Virtual Environment
 
 On Ifarm, try installing a new python virtual environment with:
 ```
@@ -32,7 +42,7 @@ Start your python3 cuda virtual environment:
 source /full/path/to/venv_cuda/bin/activate
 ```
 
-## Pytorch
+### Pytorch
 
 Follow the instructions at [PyTorch Get Started Locallly](https://pytorch.org/get-started/locally/).
 You should execute something like this:
@@ -40,7 +50,7 @@ You should execute something like this:
 pip3 install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu116
 ```
 
-## PyTorch-Geometric
+### PyTorch-Geometric
 
 Follow the installation instructions on the [PyTorch Geometric Documentation](https://pytorch-geometric.readthedocs.io/en/latest/notes/installation.html).
 
@@ -57,6 +67,22 @@ In your virtual environment you can now install from the local path:
 ```
 pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f /path/to/distribution/you/just/uploaded
 ```
+
+## Getting Started
+This project runs on three main scripts.  These all take command line arguments which you can investigate manually or with the `--help/-h` option to the following commands.
+* Create a dataset with
+```bash
+python3 train/get_dataset.py
+```
+* Run a training experiment (optionally using WANDB logging) with
+```bash
+python3 train/run_experiment.py
+```
+* Apply the trained model to write output to new banks in a HIPO file with
+```bash
+python3 apply/apply_model.py
+```
+Also, check out the [tutorials/](tutorials/)!
 
 #
 
