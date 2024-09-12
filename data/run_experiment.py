@@ -17,7 +17,7 @@ from utils import experiment
 def main(
         root_labelled="",
         root_unlabelled="",l
-        engths_labelled=[0.8,0.1,0.1],
+        lengths_labelled=[0.8,0.1,0.1],
         lengths_unlabelled=None,
         batch_size=32,
         lr=1e-3,
