@@ -16,6 +16,7 @@ import numpy as np
 from sklearn.metrics import roc_curve, auc
 from scipy.stats import ks_2samp
 import matplotlib.pyplot as plt
+from sklearn.manifold import TSNE
 
 # Gradient Reversal Layer
 class GradReverse(torch.autograd.Function):
@@ -518,3 +519,58 @@ axs[1, 2].set_yscale('log')
 plt.tight_layout()
 plt.show()
 
+def collect_embeddings(encoder, loader, device, domain_label):
+    encoder.eval()
+    all_embeds, all_labels, all_domains = [], [], []
+
+    with torch.no_grad():
+        for data in loader:
+            data = data.to(device)
+            x = encoder(data.x, data.edge_index, data.batch)
+            all_embeds.append(x.cpu())
+            all_labels.append(data.y.cpu())
+            all_domains.append(torch.full((x.size(0),), domain_label))  # 0=source, 1=target
+
+    return (
+        torch.cat(all_embeds, dim=0),
+        torch.cat(all_labels, dim=0),
+        torch.cat(all_domains, dim=0)
+    )
+
+def plot_tsne(embeddings, labels, domains, title="t-SNE of Graph Embeddings"):
+    tsne = TSNE(n_components=2, perplexity=30, n_iter=1000, random_state=42)
+    print("DEBUGGING: here")
+    embeds_2d = tsne.fit_transform(embeddings)
+
+    plt.figure(figsize=(8, 6))
+    for domain in [0, 1]:  # source vs target
+        for label in torch.unique(labels):
+            idx = (domains == domain) & (labels == label)
+            plt.scatter(
+                embeds_2d[idx, 0],
+                embeds_2d[idx, 1],
+                label=f"{'Src' if domain==0 else 'Tgt'} - Class {label.item()}",
+                alpha=0.6,
+                s=20
+            )
+
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.title(title)
+    plt.tight_layout()
+    plt.show()
+
+# Assuming you have:
+# - encoder (trained)
+# - source_loader and target_loader
+# - device (cuda or cpu)
+
+src_embeds, src_labels, src_domains = collect_embeddings(encoder, src_loader_unweighted, device, domain_label=0)
+tgt_embeds, tgt_labels, tgt_domains = collect_embeddings(encoder, tgt_loader, device, domain_label=1)
+
+# Combine
+all_embeds = torch.cat([src_embeds, tgt_embeds], dim=0)
+all_labels = torch.cat([src_labels, tgt_labels], dim=0)
+all_domains = torch.cat([src_domains, tgt_domains], dim=0)
+
+# Plot
+plot_tsne(all_embeds.numpy(), all_labels, all_domains)
