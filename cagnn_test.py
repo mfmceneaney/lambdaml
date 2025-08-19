@@ -269,13 +269,13 @@ optimizer = torch.optim.Adam(
     list(encoder.parameters()) + list(clf.parameters()) + list(disc.parameters()),
     lr=0.001
 )
-scheduler = StepLR(optimizer, step_size=10, gamma=0.5)
+# scheduler = StepLR(optimizer, step_size=10, gamma=0.5)
 
 # Linear decay from 1.0 to 0.0 over epochs
-lr_lambda = lambda epoch: 1 - (epoch / epochs)
+lr_lambda = lambda epoch: (1 - (epoch / epochs))
 scheduler = LambdaLR(optimizer, lr_lambda)
 
-scheduler = None
+# # scheduler = None
 
 def alpha_fn(epoch, total_epochs, coefficient = 0.05):
     # Default schedule: DANN-style ramp-up
@@ -410,7 +410,7 @@ def train(epochs=100, temp_fn=temp_fn, alpha_fn=alpha_fn):
             total_can_loss += can_loss.item()
 
         # Get accuracy
-        src_acc, _, _ = eval_model(src_loader)
+        src_acc, _, _ = eval_model(src_loader_unweighted)
         encoder.train()
         clf.train()
 
@@ -542,7 +542,7 @@ def plot_tsne(embeddings, labels, domains, title="t-SNE of Graph Embeddings"):
     print("DEBUGGING: here")
     embeds_2d = tsne.fit_transform(embeddings)
 
-    plt.figure(figsize=(8, 6))
+    plt.figure(figsize=(16, 12))
     for domain in [0, 1]:  # source vs target
         for label in torch.unique(labels):
             idx = (domains == domain) & (labels == label)
