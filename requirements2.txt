@@ -1,0 +1,14 @@
+torch_geometric
+torch
+wandb
+optuna
+numpy
+awkward
+hipopy
+seaborn
+matplotlib
+scikit-learn
+scipy
+particle
+argparse
+tqdm
