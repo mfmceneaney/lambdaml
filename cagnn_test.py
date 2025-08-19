@@ -551,6 +551,8 @@ def plot_tsne(embeddings, labels, domains, title="t-SNE of Graph Embeddings"):
                 embeds_2d[idx, 1],
                 label=f"{'Src' if domain==0 else 'Tgt'} - Class {label.item()}",
                 alpha=0.6,
+                marker = 'o' if domain==0 else '*',
+                color = 'b' if label.item()==0 else 'r',
                 s=20
             )
 
