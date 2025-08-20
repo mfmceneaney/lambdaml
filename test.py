@@ -1,14 +1,14 @@
-
-
-
-
 #----------------------------------------------------------------------------------------------------#
 # DATA
-from torch_geometric.data import InMemoryDataset, download_url
+from torch_geometric.data import Dataset, InMemoryDataset, download_url
+import os.path as osp
+from glob import glob
 
 # Class definitions
-class MyOwnDataset(InMemoryDataset):
-    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
+class SmallDataset(InMemoryDataset):
+    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None, datalist=[]):
+        self.datalist = datalist
+        self.root = root
         super().__init__(root, transform, pre_transform, pre_filter)
         self.load(self.processed_paths[0])
         # For PyG<2.4:
@@ -23,8 +23,13 @@ class MyOwnDataset(InMemoryDataset):
         return ['data.pt']
 
     def process(self):
+        
+        # Check input data list
+        if self.datalist is None or len(self.datalist)==0:
+            return
+
         # Read data into huge `Data` list.
-        data_list = None
+        data_list = self.datalist
 
         if self.pre_filter is not None:
             data_list = [data for data in data_list if self.pre_filter(data)]
@@ -36,13 +41,75 @@ class MyOwnDataset(InMemoryDataset):
         # For PyG<2.4:
         # torch.save(self.collate(data_list), self.processed_paths[0])
 
-def get_sample_weights(src_ds):
-    # Count class distribution
-    labels = torch.tensor([data.y.item() for data in src_ds])
+class LargeDataset(Dataset):
+    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None, datalist=None):
+        self.datalist = datalist
+        self.root = root
+        self.raw_dir = os.path.join(self.root,'data/raw/')
+        os.mkdirs(self.raw_dir)
+        self.processed_dir = os.path.join(self.root,'data/processed/')
+        os.mkdirs(self.processed_dir)
+        super().__init__(root, transform, pre_transform, pre_filter)
+
+    @property
+    def raw_file_names(self):
+        if self.datalist is not None and len(self.datalist)>0:
+            return [f'data{i}.pt' for i in range(len(self.datalist))]
+        else:
+            return [os.path.basename(path) for path in glob(os.path.join(self.raw_dir, '*.pt'))]
+
+    @property
+    def processed_file_names(self):
+        if self.datalist is not None and len(self.datalist)>0:
+            return [f'data{i}.pt' for i in range(len(self.datalist))]
+        else:
+            return [os.path.basename(path) for path in glob(os.path.join(self.processed_dir, '*.pt'))]
+
+    def process(self):
+
+        # Check input data list
+        if self.datalist is None or len(self.datalist)==0:
+            return
+
+        idx = 0
+        for data in self.datalist:
+
+            if self.pre_filter is not None and not self.pre_filter(data):
+                continue
+
+            if self.pre_transform is not None:
+                data = self.pre_transform(data)
+
+            torch.save(data, osp.join(self.processed_dir, f'data_{idx}.pt'))
+            idx += 1
+
+    def len(self):
+        return len(self.processed_file_names)
+
+    def get(self, idx):
+        data = torch.load(osp.join(self.processed_dir, f'data_{idx}.pt'))
+        if self.transform:
+            data = self.transform(data)
+        return data
+
+def get_sample_weights(ds):
+    """
+    :params:
+        ds : Dataset
+
+    :return:
+        sampler weights
+
+    :description:
+        Given a labelled dataset, generate a list of weights for a sampler such that all classes are equally probable.
+    """
+
+    # Count unique labels and weight them inversely to their total counts
+    labels = torch.tensor([data.y.item() for data in ds])
     class_counts = torch.bincount(labels)
     class_weights = 1. / class_counts.float()
-    sample_weights = [class_weights[label] for label in labels]
-    return sample_weights
+    sampler_weights = [class_weights[label] for label in labels]
+    return sampler_weights
 
 #----------------------------------------------------------------------------------------------------#
 # MODELS
@@ -195,8 +262,10 @@ from sklearn.manifold import TSNE
 from torch.autograd import Variable
 import math
 
-# Contrastive loss: NT-Xent (simplified)
+
 def contrastive_loss(z1, z2, temperature=0.5):
+
+    # Compute the contrastive loss: NT-Xent (simplified)
     z1 = F.normalize(z1, dim=1)
     z2 = F.normalize(z2, dim=1)
     batch_size = z1.size(0)
@@ -211,11 +280,14 @@ def contrastive_loss(z1, z2, temperature=0.5):
     nominator = torch.exp(positives / temperature)
     denominator = torch.sum(torch.exp(similarity / temperature), dim=1) - torch.exp(torch.ones_like(positives) / temperature)
     loss = -torch.log(nominator / denominator)
+
     return loss.mean()
 
 #----- TIToK Loss definitions -----#
 
 def exploss(y_source_prob, y_source, alpha=0.5):
+
+    # Compute the exponential loss
     loss_sum = 0
     nc = y_source_prob.size(1)
     for i in range(nc):
@@ -231,13 +303,17 @@ def exploss(y_source_prob, y_source, alpha=0.5):
             if ni > 0 and nj > 0:
                 b += torch.sum(torch.exp(alpha * y_source_prob[index_j, i])) / (ni * nj)
         loss_sum += torch.sum(a) * b
+
     return loss_sum
 
-def soft_label_loss(tar_logits, soft_labels_batch, temperature=2.0):
+def soft_label_loss(tgt_logits, soft_labels_batch, temperature=2.0):
+
+    # Compute the soft label loss
     loss_soft = torch.zeros(())
-    output = F.softmax(tar_logits / temperature, dim=1)
+    output = F.softmax(tgt_logits / temperature, dim=1)
     if float(output.size(0)) > 0:
         loss_soft = -torch.sum(soft_labels_batch * torch.log(output)) / output.size(0)
+
     return loss_soft
 
 def gaussian_kernel(x, y, kernel_mul=2.0, kernel_num=5):
@@ -250,9 +326,12 @@ def gaussian_kernel(x, y, kernel_mul=2.0, kernel_num=5):
     bandwidth /= kernel_mul ** (kernel_num // 2)
     bandwidth_list = [bandwidth * (kernel_mul ** i) for i in range(kernel_num)]
     kernel_val = [torch.exp(-L2_distance / bw) for bw in bandwidth_list]
+
     return sum(kernel_val)
 
 def mmd_loss(source, target):
+
+    # Compute the Maximum Mean Discrepancy loss
     batch_size = source.size(0)
     kernels = gaussian_kernel(source, target)
     XX = kernels[:batch_size, :batch_size]
@@ -260,46 +339,52 @@ def mmd_loss(source, target):
     XY = kernels[:batch_size, batch_size:]
     YX = kernels[batch_size:, :batch_size]
     loss = torch.mean(XX + YY - XY - YX)
+
     return loss
 
-def lambda_fn(epoch, epochs):
-    return 2 / (1 + math.exp(-10 * epoch / epochs)) - 1
-
-#NOTE: FROM: https://github.com/big-chuan-bro/TiTok/blob/main/ImbalancedDA/Titok.py
-def gen_soft_labels(num_classes, src_loader, encoder, clf, temperature=2):
+def gen_soft_labels(num_classes, loader, encoder, clf, temperature=2, device='cuda:0'): #NOTE: FROM: https://github.com/big-chuan-bro/TiTok/blob/main/ImbalancedDA/Titok.py
     
+    # Set models to evaluation mode
     encoder.eval()
     clf.eval()
-    cuda = torch.cuda.is_available()
-    soft_labels = torch.zeros(num_classes, 1, num_classes).cuda()
-    sum_classes = torch.zeros(num_classes).cuda()
+
+    # Create arrays
+    soft_labels = torch.zeros(num_classes, 1, num_classes).to(device)
+    sum_classes = torch.zeros(num_classes).to(device)
     pred_scores_total = []
     label_total = []
 
-    for src_batch in src_loader:
+    # Loop data
+    for batch in loader:
 
-        src_batch  = src_batch.to(device)
-        src_feats  = encoder(src_batch.x, src_batch.edge_index, src_batch.batch)
-        src_logits = clf(src_feats)
-        label_total.append(src_batch.y)
+        # Apply model
+        batch  = batch.to(device)
+        feats  = encoder(batch.x, batch.edge_index, batch.batch)
+        logits = clf(feats)
 
-        pred_scores = F.softmax(src_logits / temperature, dim=1).data.cuda()
-        pred_scores_total.append(pred_scores)
+        # Add to arrays
+        label_total.append(batch.y)
+        preds = F.softmax(logits / temperature, dim=1).data.to(device)
+        preds_total.append(preds)
 
-    pred_scores_total = torch.cat(pred_scores_total)
+    # Concatenate arrays
+    preds_total = torch.cat(preds_total)
     label_total = torch.cat(label_total)
 
-    for i in range(len(src_loader)):
+    # Loop data and set class counts and soft labels
+    for i in range(len(loader)):
         sum_classes[label_total[i]] += 1
-        soft_labels[label_total[i]][0] += pred_scores_total[i]
+        soft_labels[label_total[i]][0] += preds_total[i]
+
+    # Loop classes and divide soft labels by class counts
     for cl_idx in range(num_classes):
         soft_labels[cl_idx][0] /= sum_classes[cl_idx]
+
     return soft_labels
 
-
-# soft label for each batch #NOTE: FROM: https://github.com/big-chuan-bro/TiTok/blob/main/ImbalancedDA/Titok.py
-def ret_soft_label(label, soft_labels, num_classes=2):
+def ret_soft_label(label, soft_labels, num_classes=2, device='cuda:0'): #NOTE: FROM: https://github.com/big-chuan-bro/TiTok/blob/main/ImbalancedDA/Titok.py
     
+    # Compute the soft label for a batch
     soft_label_for_batch = torch.zeros(label.size(0), num_classes).to(device)
     for i in range(label.size(0)):
         soft_label_for_batch[i] = soft_labels[label.data[i]]
@@ -451,10 +536,12 @@ def train_can(epochs=100, temp_fn=temp_fn, alpha_fn=alpha_fn):
 
     return clf_losses, can_losses, clf_accs, lrs
 
-def train_titok(encoder, clf, src_loader, tgt_loader, num_classes=2, soft_labels_temp=2, epochs=100, temp_fn=temp_fn, alpha_fn=alpha_fn, lambda_fn=lambda_fn):
+def train_titok(encoder, clf, src_loader, tgt_loader, num_classes=2, soft_labels_temp=2, epochs=100, confidence_threshold=0.8, temp_fn=1.0, alpha_fn=1.0, lambda_fn=1.0, coeff_mmd=0.3, coeff_auc=0.01, coeff_soft=0.25, device='cuda:0'):
 
-    soft_labels = gen_soft_labels(num_classes, src_loader, encoder, clf, temperature=soft_labels_temp)
+    # Create soft labels #TODO: Pretrain first?
+    soft_labels = gen_soft_labels(num_classes, src_loader, encoder, clf, temperature=soft_labels_temp, device=device)
     
+    # Set models in train mode
     encoder.train()
     clf.train()
 
@@ -490,13 +577,17 @@ def train_titok(encoder, clf, src_loader, tgt_loader, num_classes=2, soft_labels
         else:
             lambd = lambda_fn
         
+        # Initialize losses
         total_loss      = 0
         total_loss_cls  = 0
         total_loss_auc  = 0
         total_loss_mmd  = 0
         total_loss_soft = 0
-        # Parallel iteration over source and target loaders
+
+        # Iterate over source and target loaders in parallel
         for src_batch, tgt_batch in zip(src_loader, tgt_loader):
+
+            # Reset gradients
             optimizer.zero_grad()
 
             # Source graph forward pass
@@ -512,58 +603,51 @@ def train_titok(encoder, clf, src_loader, tgt_loader, num_classes=2, soft_labels
 
             #----- BEGIN TIToK -----#
 
-            # GET CONFIDENT LABELS ON TARGET DOMAIN
-
-            # Apply softmax to get probabilities
+            # Apply softmax to get probabilities on target domain
             tgt_probs = F.softmax(tgt_logits, dim=1)
 
             # Get max class probabilities
             confidences, pred_classes = torch.max(tgt_probs, dim=1)  # [B]
 
             # Select samples with confidence above a threshold
-            threshold = 0.8
-            mask = confidences >= threshold
+            mask = confidences >= confidence_threshold
 
             # Select the logits and predicted labels of those confident samples
             tgt_logits_confident = tgt_logits[mask]           # [B_confident, num_classes]
             tgt_labels_confident = pred_classes[mask]         # [B_confident]
 
-            # GET SOFT LABELS
+            # Get soft labels
+            soft_labels_batch = ret_soft_label(tgt_labels_confident, soft_labels, num_classes=num_classes, device=device)
 
-            # print("DEBUGGING: tgt_logits_confident[0:10] = ",tgt_logits_confident[0:10])
-            # print("DEBUGGING: soft_labels = ",soft_labels)
-
-            soft_labels_batch = ret_soft_label(tgt_labels_confident, soft_labels, num_classes=num_classes)
-
-            # LOSS COMPUTATIONS
-
-            # Source classification
+            # Source classification loss
             loss_cls = F.cross_entropy(src_logits, src_labels)
             
             # AUC-style loss (exploss)
             loss_auc = exploss(F.softmax(src_logits, dim=1), src_labels, alpha=0.5)
             
-            # Optional: MMD between source/target embeddings
+            # Optional: MMD loss between source/target embeddings
             loss_mmd = mmd_loss(src_feats, tgt_feats)
             
-            # Target knowledge distillation (on confident samples only)
+            # Target knowledge distillation loss (on confident samples only)
             loss_soft = soft_label_loss(tgt_logits_confident, soft_labels_batch, temperature=2.0)
             
-            # Combine
-            loss = loss_cls + 0.3 * lambd * loss_mmd + 0.01 * loss_auc + 0.25 * loss_soft
+            # Combine losses
+            loss = loss_cls + coeff_mmd * lambd * loss_mmd + coeff_auc * loss_auc + coeff_soft * loss_soft
 
             #------- END TIToK -----#
             
+            # Backpropagate losses and update parameters
             loss.backward()
             optimizer.step()
 
+            # Pop losses
             total_loss += loss.item()
             total_loss_cls += loss_cls.item()
             total_loss_mmd += loss_mmd.item()
             total_loss_auc += loss_auc.item()
             total_loss_soft += loss_soft.item()
 
-        # Get accuracy
+        # Evaluate model and put back in training mode
         src_acc, src_per_class_acc, src_balanced_acc, _, _ = eval_model(src_loader_unweighted)
         encoder.train()
         clf.train()
@@ -578,7 +662,7 @@ def train_titok(encoder, clf, src_loader, tgt_loader, num_classes=2, soft_labels
         src_per_class_accs.append(src_per_class_acc)
         src_balanced_accs.append(src_balanced_acc)
 
-        # Log and step learning rate scheduler
+        # Log learning rate and step scheduler
         lrs.append(optimizer.param_groups[0]['lr'])
         if scheduler is not None: scheduler.step()
 
@@ -588,7 +672,7 @@ def train_titok(encoder, clf, src_loader, tgt_loader, num_classes=2, soft_labels
 
 #----------------------------------------------------------------------------------------------------#
 # EVAL
-def eval_model(loader,num_classes=2,return_labels=False):
+def eval_model(encoder, clf, loader,num_classes=2,return_labels=False):
     encoder.eval()
     clf.eval()
     correct = total = 0
@@ -661,9 +745,9 @@ def eval_disc(src_loader,tgt_loader,return_labels=False,alpha=1.0):
                 labels.extend(domain_labels.cpu().tolist())
     return correct / total, logits, domain_labels
 
-def get_best_threshold():
+def get_best_threshold(labels, preds):
     # Compute ROC curve and AUC
-    fpr, tpr, thresholds = roc_curve(ys, outs)
+    fpr, tpr, thresholds = roc_curve(labels, outs)
     roc_auc = auc(fpr, tpr)
 
     # Compute Figure of Merit: FOM = TPR / sqrt(TPR + FPR)
@@ -876,29 +960,29 @@ if DATASET_NAME == 'PROTEINS':
     src_ds, tgt_ds = random_split(full_ds, [split_len, total_len - split_len])
 
 if DATASET_NAME == 'LAMBDAS':
+    src_root='/work/clas12/users/mfmce/pyg_test_rec_particle_dataset_3_7_25/'
+    tgt_root='/work/clas12/users/mfmce/pyg_DATA_rec_particle_dataset_3_5_24/'
     max_idx = 1000
-    root='/work/clas12/users/mfmce/pyg_test_rec_particle_dataset_3_7_25/'
-    src_ds = MyOwnDataset(
-            root,
-            transform=None, #T.Compose([T.ToUndirected(),T.KNNGraph(k=6),T.NormalizeFeatures()]),
-            pre_transform=None,
-            pre_filter=None
-        )[0:max_idx]
+    
 
-    root='/work/clas12/users/mfmce/pyg_DATA_rec_particle_dataset_3_5_24/'
-    tgt_ds = MyOwnDataset(
-            root,
-            transform=None, #T.Compose([T.ToUndirected(),T.KNNGraph(k=6),T.NormalizeFeatures()]),
-            pre_transform=None,
-            pre_filter=None
-        )[0:max_idx]
+#----- Load datasets -----#
+src_ds = MyOwnDataset(
+        src_root,
+        transform=None, #T.Compose([T.ToUndirected(),T.KNNGraph(k=6),T.NormalizeFeatures()]),
+        pre_transform=None,
+        pre_filter=None
+    )[0:max_idx]
 
-#dataset_both = TODO: SEE BELOW
-
+tgt_ds = MyOwnDataset(
+        tgt_root,
+        transform=None, #T.Compose([T.ToUndirected(),T.KNNGraph(k=6),T.NormalizeFeatures()]),
+        pre_transform=None,
+        pre_filter=None
+    )[0:max_idx]
 
 #----- Create weighted data loader for source data -----#
 
-sampler_weighs = get_sampler_weights()
+sampler_weighs = get_sampler_weights(src_ds)
 
 sampler = WeightedRandomSampler(weights=sample_weights,
                                  num_samples=len(src_ds),
@@ -973,7 +1057,8 @@ def temp_fn(epoch, max_epoch, t_min=0.07, t_max=0.5):
 
 temp_fn = 0.1
 
-
+def lambda_fn(epoch, epochs):
+    return 2 / (1 + math.exp(-10 * epoch / epochs)) - 1
 
 total_losses, total_losses_cls, total_losses_mmd, total_losses_auc, total_losses_soft, src_accs, src_per_class_accs, src_balanced_accs, lrs = train(encoder, clf, src_loader, tgt_loader, num_classes=2, soft_labels_temp=2, epochs=epochs, temp_fn=temp_fn, alpha_fn=alpha_fn, lambda_fn=lambda_fn)
 
