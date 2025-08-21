@@ -3,6 +3,8 @@
 from torch_geometric.data import Dataset, InMemoryDataset, download_url
 import os.path as osp
 from glob import glob
+import multiprocessing
+from tqdm import tqdm
 
 # Class definitions
 class SmallDataset(InMemoryDataset):
@@ -42,13 +44,10 @@ class SmallDataset(InMemoryDataset):
         # torch.save(self.collate(data_list), self.processed_paths[0])
 
 class LargeDataset(Dataset):
-    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None, datalist=None):
+    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None, datalist=None, num_workers=8):
         self.datalist = datalist
         self.root = root
-        self.raw_dir = os.path.join(self.root,'data/raw/')
-        os.mkdirs(self.raw_dir)
-        self.processed_dir = os.path.join(self.root,'data/processed/')
-        os.mkdirs(self.processed_dir)
+        self.num_workers = num_workers
         super().__init__(root, transform, pre_transform, pre_filter)
 
     @property
@@ -65,23 +64,26 @@ class LargeDataset(Dataset):
         else:
             return [os.path.basename(path) for path in glob(os.path.join(self.processed_dir, '*.pt'))]
 
+    def save_graph(self,idx):
+
+        data = self.datalist[idx]
+
+        if self.pre_filter is not None and not self.pre_filter(data):
+            return
+
+        if self.pre_transform is not None:
+            data = self.pre_transform(data)
+
+        torch.save(data, osp.join(self.processed_dir, f'data_{idx}.pt'))
+
     def process(self):
 
         # Check input data list
         if self.datalist is None or len(self.datalist)==0:
             return
 
-        idx = 0
-        for data in self.datalist:
-
-            if self.pre_filter is not None and not self.pre_filter(data):
-                continue
-
-            if self.pre_transform is not None:
-                data = self.pre_transform(data)
-
-            torch.save(data, osp.join(self.processed_dir, f'data_{idx}.pt'))
-            idx += 1
+        with multiprocessing.Pool(processes=min(len(self.datalist),self.num_workers)) as pool:
+            list(tqdm(pool.imap_unordered(self.save_graph, range(len(self.datalist))), total=len(self.datalist)))
 
     def len(self):
         return len(self.processed_file_names)
