@@ -538,7 +538,7 @@ def train_can(epochs=100, temp_fn=temp_fn, alpha_fn=alpha_fn):
 
     return clf_losses, can_losses, clf_accs, lrs
 
-def train_titok(encoder, clf, src_loader, tgt_loader, num_classes=2, soft_labels_temp=2, epochs=100, confidence_threshold=0.8, temp_fn=1.0, alpha_fn=1.0, lambda_fn=1.0, coeff_mmd=0.3, coeff_auc=0.01, coeff_soft=0.25, device='cuda:0'):
+def train_titok(encoder, clf, src_loader, tgt_loader, num_classes=2, soft_labels_temp=2, epochs=100, confidence_threshold=0.8, temp_fn=1.0, alpha_fn=1.0, lambda_fn=1.0, coeff_mmd=0.3, coeff_auc=0.01, coeff_soft=0.25, device='cuda:0', verbose=True):
 
     # Create soft labels #TODO: Pretrain first?
     soft_labels = gen_soft_labels(num_classes, src_loader, encoder, clf, temperature=soft_labels_temp, device=device)
@@ -668,36 +668,43 @@ def train_titok(encoder, clf, src_loader, tgt_loader, num_classes=2, soft_labels
         lrs.append(optimizer.param_groups[0]['lr'])
         if scheduler is not None: scheduler.step()
 
-        print(f'Epoch {epoch:03d} total_loss: {total_loss:.4f} loss_cls: {total_loss_cls:.4f} loss_mmd: {total_loss_mmd:.4f} loss_auc: {total_loss_auc:.4f} loss_soft: {total_loss_soft:.4f}')
+        if verbose: print(f'Epoch {epoch:03d} total_loss: {total_loss:.4f} loss_cls: {total_loss_cls:.4f} loss_mmd: {total_loss_mmd:.4f} loss_auc: {total_loss_auc:.4f} loss_soft: {total_loss_soft:.4f}')
 
     return total_losses, total_losses_cls, total_losses_mmd, total_losses_auc, total_losses_soft, src_accs, src_per_class_accs, src_balanced_accs, lrs
 
 #----------------------------------------------------------------------------------------------------#
 # EVAL
-def eval_model(encoder, clf, loader,num_classes=2,return_labels=False):
+def eval_model(encoder, clf, loader, num_classes=2, return_labels=False):
+
+    # Set models to evaluation mode
     encoder.eval()
     clf.eval()
-    correct = total = 0
-    logits = []
-    labels = []
+
+    # Initialize variables and arrays
+    correct = 0
+    total   = 0
+    preds   = []
+    labels  = []
     correct_per_class = torch.zeros(num_classes).to(device)
-    total_per_class = torch.zeros(num_classes).to(device)
+    total_per_class   = torch.zeros(num_classes).to(device)
+
+    # Loop data
     with torch.no_grad():
         for batch in loader:
-            batch = batch.to(device)
-            emb = encoder(batch.x, batch.edge_index, batch.batch)
-            out = clf(emb)
-            pred = F.softmax(out,dim=1).argmax(dim=1)
-            correct += (pred == batch.y).sum().item()
-            total += batch.y.size(0)
+            batch  = batch.to(device)
+            feats  = encoder(batch.x, batch.edge_index, batch.batch)
+            logits = clf(feats)
+            preds  = F.softmax(logits,dim=1).argmax(dim=1)
+            correct += (preds == batch.y).sum().item()
+            total   += batch.y.size(0)
             if return_labels:
-                logits.extend(F.softmax(out,dim=1)[:,1].cpu().tolist())
+                preds.extend(preds.cpu().tolist())
                 labels.extend(batch.y.cpu().tolist())
 
-            for i in range(len(pred)):
+            for i in range(len(preds)):
                 label = batch.y[i]
                 total_per_class[label] += 1
-                if pred[i] == label:
+                if preds[i] == label:
                     correct_per_class[label] += 1
 
     # Avoid division by zero
@@ -709,45 +716,55 @@ def eval_model(encoder, clf, loader,num_classes=2,return_labels=False):
 
     acc = correct / total
     
-    return acc, per_class_acc.cpu().tolist(), balanced_acc, logits, labels
+    return acc, per_class_acc.cpu().tolist(), balanced_acc, preds, labels
 
-def eval_disc(src_loader,tgt_loader,return_labels=False,alpha=1.0):
+def eval_disc(src_loader,tgt_loader,return_labels=False):
+
+    # Set models to evaluation mode
     encoder.eval()
     disc.eval()
-    correct = total = 0
-    logits = []
-    labels = []
+
+    # Initialize variables and arrays
+    correct = 0
+    total   = 0
+    preds   = []
+    labels  = []
+
+    # Loop source and target domain data
     with torch.no_grad():
         for src_batch, tgt_batch in zip(src_loader,tgt_loader):
 
-            # Get source batch embedding
-            src_batch = src_batch.to(device)
-            src_emb = encoder(src_batch.x, src_batch.edge_index, src_batch.batch)
-            src_out = disc(src_emb)
+            # Get source batch embedding and logits
+            src_batch  = src_batch.to(device)
+            src_feats  = encoder(src_batch.x, src_batch.edge_index, src_batch.batch)
+            src_logits = disc(src_feats)
 
-            # Get targete batch embedding
-            tgt_batch = tgt_batch.to(device)
-            tgt_emb = encoder(tgt_batch.x, tgt_batch.edge_index, tgt_batch.batch)
-            tgt_out = disc(tgt_emb)
+            # Get target batch embedding and logits
+            tgt_batch  = tgt_batch.to(device)
+            tgt_feats  = encoder(tgt_batch.x, tgt_batch.edge_index, tgt_batch.batch)
+            tgt_logits = disc(tgt_feats)
 
-            # Domain classification loss (labels: 0 for source, 1 for target)
-            domain_emb = torch.cat([src_emb, tgt_emb], dim=0)
+            # Get domain classification predictions and loss
+            domain_feats  = torch.cat([src_feats, tgt_feats], dim=0)
             domain_labels = torch.cat([
-                torch.zeros(src_emb.size(0), dtype=torch.long),
-                torch.ones(tgt_emb.size(0), dtype=torch.long)
+                torch.zeros(src_feats.size(0), dtype=torch.long),
+                torch.ones(tgt_feats.size(0), dtype=torch.long)
             ], dim=0).to(device)
+            domain_logits = disc(domain_feats, alpha=alpha)
+            domain_loss   = F.cross_entropy(domain_logits, domain_labels)
+            domain_preds  = F.softmax(domain_logits,dim=0).argmax(dim=1)
 
-            domain_pred = disc(domain_emb, alpha=alpha)
-            domain_loss = F.cross_entropy(domain_pred, domain_labels)
-            domain_out = F.softmax(domain_pred,dim=0).argmax(dim=1)
-            correct += (domain_out == domain_labels).sum().item()
-            total += domain_labels.size(0)
+            # Record domain correct predictions, logits, and labels
+            correct += (domain_preds == domain_labels).sum().item()
+            total   += domain_labels.size(0)
             if return_labels:
-                logits.extend(F.softmax(domain_pred,dim=0).cpu().tolist())
+                preds.extend(domain_preds.cpu().tolist())
                 labels.extend(domain_labels.cpu().tolist())
-    return correct / total, logits, domain_labels
+
+    return correct / total, preds, domain_labels
 
 def get_best_threshold(labels, preds):
+
     # Compute ROC curve and AUC
     fpr, tpr, thresholds = roc_curve(labels, outs)
     roc_auc = auc(fpr, tpr)
@@ -762,86 +779,49 @@ def get_best_threshold(labels, preds):
 #----------------------------------------------------------------------------------------------------#
 # PLOT
 
-# Temperature values
-epoch_range   = np.arange(1, epochs + 1)
-alpha_values  = [alpha_fn(e, epochs) if callable(alpha_fn) else alpha_fn for e in epoch_range]
-lambda_values = [lambda_fn(e, epochs) if callable(lambda_fn) else lambda_fn for e in epoch_range]
+# Plot metrics by epoch
+def plot_epoch_metrics(ax, epochs, title='', xlabel='', ylabel='', yscale=None, xscale=None, legend_loc=None, losses=[], plot_kwargs=[], normalize_to_max=True):
+    
+    # Check dimensions of metrics and plotting arguments lists
+    if len(epoch_metrics)!=len(plot_kwargs):
+        raise ValueError(f"Number of epoch metrics ({len(epoch_metrics)}) does not match number of plot kwargs ({len(plot_kwargs)})")
 
-# Plot
-fig, axs = plt.subplots(2, 3, figsize=(20, 12))
+    # Loop and plot metrics
+    for idx, epoch_metric in enumerate(epoch_metrics):
+        ax.plot(range(epochs), epoch_metric/np.max(epoch_metric) if normalize_to_max else epoch_metric, **plot_kwargs[idx])
 
-# Alpha
-axs[0, 0].plot(epoch_range, alpha_values, color='orange', linestyle='--', label='alpha')
-axs[0, 0].plot(epoch_range, lambda_values, color='skyblue', linestyle=':', label='lambda')
-axs[0, 0].set_title('Loss Coefficients',usetex=True)
-axs[0, 0].set_xlabel('Epoch',usetex=True)
-axs[0, 0].set_ylabel('Coefficients',usetex=True)
-axs[0, 0].legend(loc='best')
-
-def plot_coefficient_fns(ax, epochs, fns, fn_labels=None, fn_colors=None, fn_linestyles=None, **kwargs):
-    #TODO
-
-# Classifier & Domain Losses
-axs[0, 1].plot(epoch_range, total_losses_cls/np.max(total_losses_cls), label='Classifier Loss', linestyle='-', color='green')
-axs[0, 1].plot(epoch_range, total_losses_mmd/np.max(total_losses_mmd), label='MMD Loss', linestyle='--', color='orange')
-axs[0, 1].plot(epoch_range, total_losses_auc/np.max(total_losses_auc), label='AUC Loss', linestyle=':', color='skyblue')
-axs[0, 1].plot(epoch_range, total_losses_soft/np.max(total_losses_soft), label='Soft Loss', linestyle='-.', color='salmon')
-axs[0, 1].set_title('Normalized Losses')
-axs[0, 1].set_xlabel('Epoch')
-axs[0, 1].set_ylabel('Loss/Loss_max')
-axs[0, 1].legend(loc='best')
-
-# Accuracies
-axs[1, 0].plot(epoch_range, src_accs, label='Raw Accuracy', linestyle='-', color='purple')
-# axs[1, 0].plot(epoch_range, src_per_class_accs[:,0], label=f'Class {0} Accuracy', linestyle='.', color='blue')
-axs[1, 0].plot(epoch_range, src_balanced_accs, label='Balanced Accuracy', linestyle='-.', color='salmon')
-# axs[1, 0].plot(epoch_range, tgt_acc, label='Target Accuracy', color='red')
-axs[1, 0].set_title('Source Domain Accuracies')
-axs[1, 0].set_xlabel('Epoch')
-axs[1, 0].set_ylabel('Accuracy')
-axs[1, 0].legend()
+    # Set up plot
+    ax.set_title(title, usetex=True)
+    ax.set_xlabel(xlabel, usetex=True)
+    ax.set_ylabel(ylabel, usetex=True)
+    if yscle is not None: ax.set_yscale(yscale)
+    if xscale is not None: ax.set_xscale(xscale)
+    if legend_loc is not None: ax.legend(loc=legend_loc)
 
 # Plot ROC
-axs[1, 1].plot([0, 1], [0, 1], color='navy', lw=1, linestyle='--')
-axs[1, 1].plot(fpr, tpr, color='darkorange', lw=2, label=f"ROC curve (AUC = {roc_auc:.2f})")
-axs[1, 1].scatter(best_fpr, best_tpr, color='red', marker='*', s=100, label=f'Max FOM \n(FOM={best_fom:.2f})\n(Thr={best_thr:.2f})')
-axs[1, 1].set_xlim([0.0, 1.0])
-axs[1, 1].set_ylim([0.0, 1.05])
-axs[1, 1].set_xlabel('False Positive Rate')
-axs[1, 1].set_ylabel('True Positive Rate')
-axs[1, 1].set_title('Classifier ROC Curve')
-axs[1, 1].legend(loc="lower right")
-axs[1, 1].grid(True)
+def plot_roc(ax, fpr, tpr, roc_auc, best_fpr, best_tpr, best_fom, best_thr):
+    ax.plot(fpr, tpr, color='darkorange', lw=2, label=f"ROC curve (AUC = {roc_auc:.2f})")
+    ax.scatter(best_fpr, best_tpr, color='red', marker='*', s=100, label=f'Max FOM \n(FOM={best_fom:.2f})\n(Thr={best_thr:.2f})')
+    ax.set_xlim([0.0, 1.0])
+    ax.set_ylim([0.0, 1.05])
+    ax.set_xlabel('False Positive Rate')
+    ax.set_ylabel('True Positive Rate')
+    ax.set_title('Classifier ROC Curve')
+    ax.legend(loc="lower right")
+    ax.grid(True)
 
-# Run KS test
-stat, p_value = ks_2samp(outs, tgt_outs)
-print(f"KS test statistic: {stat:.4f}, p-value: {p_value:.4g}")
-
-# Plot model outputs
-axs[0, 2].hist(outs, bins=50, range=(0,1), alpha=0.6, label="Source Domain", color='skyblue', density=True)
-axs[0, 2].hist(tgt_outs, bins=50, range=(0,1), alpha=0.6, label="Target Domain", color='salmon', density=True)
-axs[0, 2].plot([], [], ' ', label=f"KS test statistic: {stat:.4f}, p-value: {p_value:.4g}")
-axs[0, 2].set_xlim([0.0, 1.0])
-axs[0, 2].set_title("Classifier Output Distribution")
-axs[0, 2].set_xlabel("Predicted Probability")
-axs[0, 2].set_ylabel("Density")
-axs[0, 2].set_yscale('log')
-axs[0, 2].legend()
-axs[0, 2].grid(True)
-
-# Learning rates
-axs[1, 2].plot(epoch_range, lrs, color='blue')
-axs[1, 2].set_title('Learning Rate',usetex=True)
-axs[1, 2].set_xlabel('Epoch',usetex=True)
-axs[1, 2].set_ylabel('Learning Rate',usetex=True)
-axs[1, 2].set_yscale('log')
-
-# # Hide unused subplot
-# axs[0,2].axis('off')
-# axs[1,2].axis('off')
-
-plt.tight_layout()
-plt.show()
+# Plot domain predictions with KS statistic
+def plot_domain_preds(ax, src_preds, tgt_preds):
+    stat, p_value = ks_2samp(src_preds, tgt_preds)
+    ax.hist(src_preds, bins=50, range=(0, 1), alpha=0.6, label="Source Domain", color='skyblue', density=True)
+    ax.hist(tgt_preds, bins=50, range=(0, 1), alpha=0.6, label="Target Domain", color='salmon', density=True)
+    ax.set_xlim([0.0, 1.0])
+    ax.set_title("Classifier Output Distribution")
+    ax.set_xlabel("Predicted Probability")
+    ax.set_ylabel("Density")
+    ax.set_yscale('log')
+    ax.legend()
+    ax.grid(True)
 
 def collect_embeddings(encoder, clf, loader, device, domain_label):
     encoder.eval()
@@ -866,16 +846,15 @@ def collect_embeddings(encoder, clf, loader, device, domain_label):
         torch.cat(all_preds, dim=0)
     )
 
-def plot_tsne(embeddings, labels, domains, title="t-SNE of Graph Embeddings"):
+def plot_tsne(ax, embeddings, labels, domains, title="t-SNE of Graph Embeddings"):
     tsne = TSNE(n_components=2, perplexity=30, max_iter=1000, random_state=42)
 
     embeds_2d = tsne.fit_transform(embeddings)
 
-    plt.figure(figsize=(16, 12))
     for domain in [0, 1]:  # source vs target
         for label in torch.unique(labels):
             idx = (domains == domain) & (labels == label)
-            plt.scatter(
+            ax.scatter(
                 embeds_2d[idx, 0],
                 embeds_2d[idx, 1],
                 label=f"{'Src' if domain==0 else 'Tgt'} - Class {label.item()}",
@@ -885,14 +864,11 @@ def plot_tsne(embeddings, labels, domains, title="t-SNE of Graph Embeddings"):
                 s=20
             )
 
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.title(title)
-    plt.tight_layout()
-    plt.show()
+    ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    ax.set_title(title)
 
-def plot_kinematic_distributions(encoder, clf, dataloader, threshold=0.7, device='cuda',
-                                  class_idx_signal=1, class_idx_background=0,
-                                  kinematic_labels=None):
+def get_kinematics(encoder, clf, dataloader, threshold=0.7, device='cuda',
+                                  class_idx_signal=1, class_idx_background=0):
     """
     Plots histograms of each kinematic variable for predicted signal and background.
     """
@@ -927,25 +903,33 @@ def plot_kinematic_distributions(encoder, clf, dataloader, threshold=0.7, device
     # Convert to tensors
     kin_signal = torch.stack(all_kin_signal)  # [N_signal, num_kin_vars]
     kin_bkg = torch.stack(all_kin_bkg)        # [N_bkg, num_kin_vars]
-    num_kin_vars = kin_signal.size(1)
 
-    # Labels for plots
-    if kinematic_labels is None:
-        kinematic_labels = [f"Kin_{i}" for i in range(num_kin_vars)]
+    return sg_kin, bg_kin
 
-    # Plot
-    fig, axs = plt.subplots(nrows=(num_kin_vars + 1) // 2, ncols=2, figsize=(14, 4 * ((num_kin_vars + 1) // 2)))
+def plot_kinematics(axs, sg_kin, bg_kin, kin_xlabels=None, sg_hist_kwargs={'bins':50, 'alpha':0.6, 'label':'Signal', 'color':'C0', 'density':True}, g_hist_kwargs={'bins':50, 'alpha':0.6, 'label':'Background', 'color':'C1', 'density':True})
+    
+    # Set number of kinematics
+    n_kin = sg_kin.size(1)
+
+    # Set kinematics labels
+    if kin_xlabels is None:
+        kin_xlabels = [f"Kin_{i}" for i in range(num_kin_vars)]
+
+    # Set and flatten axes
+    if axs is None or len(axs)==0:
+        fig, axs = plt.subplots(nrows=(n_kin + 1) // 2, ncols=2, figsize=(14, 4 * ((n_kin + 1) // 2)))
     axs = axs.flatten()
 
-    for i in range(num_kin_vars):
-        axs[i].hist(kin_signal[:, i], bins=40, alpha=0.6, label='Signal', color='C0', density=True)
-        axs[i].hist(kin_bkg[:, i], bins=40, alpha=0.6, label='Background', color='C1', density=True)
-        axs[i].set_title(kinematic_labels[i])
-        axs[i].legend()
-        axs[i].grid(True)
+    # Turn off unused axes
+    for idx in range(len(axs) - len(num_kin_vars)):
+        axs[-1 - idx].axis('off')
 
-    plt.tight_layout()
-    plt.show()
+    # Loop and plot kinematics
+    for i in range(n_kin):
+        axs[i].hist(sg_kin[:, i], **sg_hist_kwargs)
+        axs[i].hist(bg_kin[:, i], **bg_hist_kwargs)
+        axs[i].set_xlabel(kin_xlabels[i],usetex=True)
+        axs[i].legend()
 
 #----------------------------------------------------------------------------------------------------#
 # UI
@@ -1064,14 +1048,32 @@ def lambda_fn(epoch, epochs):
 
 total_losses, total_losses_cls, total_losses_mmd, total_losses_auc, total_losses_soft, src_accs, src_per_class_accs, src_balanced_accs, lrs = train(encoder, clf, src_loader, tgt_loader, num_classes=2, soft_labels_temp=2, epochs=epochs, temp_fn=temp_fn, alpha_fn=alpha_fn, lambda_fn=lambda_fn)
 
-src_acc, src_per_class_acc, src_balanced_acc, outs, ys = eval_model(src_loader_unweighted,return_labels=True)
-tgt_acc, tgt_per_class_acc, tgt_balanced_acc, tgt_outs, _ = eval_model(tgt_loader,return_labels=True)
+src_acc, src_per_class_acc, src_balanced_acc, src_preds, src_labels = eval_model(src_loader_unweighted,return_labels=True)
+tgt_acc, tgt_per_class_acc, tgt_balanced_acc, tgt_preds, tgt_labels = eval_model(tgt_loader,return_labels=True)
+
+#TODO: NEED TO SELELCTO FROM src_preds and tgt_preds [nbatches, batch_size, num_classes] the classes you actually want
+
 # dis_acc, dis_outs, _ = eval_disc(src_loader,tgt_loader,return_labels=True,alpha=1.0)
 print(f'Source Accuracy: {src_acc:.4f}')
 print(f'Source Per Class Accuracy: {src_per_class_acc}')
 print(f'Source Balanced Accuracy: {src_balanced_acc:.4f}')
 if DATASET_NAME!='LAMBDAS': print(f'Target Accuracy: {tgt_acc:.4f}')
 # print(f'Discri Accuracy: {dis_acc:.4f}')
+
+# Temperature values
+epoch_range   = np.arange(1, epochs + 1)
+alpha_values  = [alpha_fn(e, epochs) if callable(alpha_fn) else alpha_fn for e in epoch_range]
+lambda_values = [lambda_fn(e, epochs) if callable(lambda_fn) else lambda_fn for e in epoch_range]
+
+# Plot
+fig, axs = plt.subplots(2, 3, figsize=(20, 12))
+#TODO: CALL PLOT METHODS
+# # Hide unused subplot
+# axs[0,2].axis('off')
+# axs[1,2].axis('off')
+
+plt.tight_layout()
+plt.show()
 
 # Assuming you have:
 # - encoder (trained)
