@@ -5,12 +5,14 @@ import os.path as osp
 from glob import glob
 import multiprocessing
 from tqdm import tqdm
+from functools import lru_cache
 
 # Class definitions
 class SmallDataset(InMemoryDataset):
-    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None, datalist=[]):
+    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None, datalist=[], clean_keys=(,)):
         self.datalist = datalist
         self.root = root
+        self.clean_keys = clean_keys
         super().__init__(root, transform, pre_transform, pre_filter)
         self.load(self.processed_paths[0])
         # For PyG<2.4:
@@ -23,6 +25,15 @@ class SmallDataset(InMemoryDataset):
     @property
     def processed_file_names(self):
         return ['data.pt']
+
+    def clean_data(self,data):
+        cleaned_data = Data()
+        for key in data.keys():
+            if key in (self.clean_keys): continue
+            value = getattr(data, key)
+            if isinstance(value, torch.Tensor):
+                cleaned_data[key] = value.detach().cpu().clone()
+        return cleaned_data
 
     def process(self):
         
@@ -39,9 +50,16 @@ class SmallDataset(InMemoryDataset):
         if self.pre_transform is not None:
             data_list = [self.pre_transform(data) for data in data_list]
 
+        data_list = [self.clean_data(data) for data in data_list]
+
         self.save(data_list, self.processed_paths[0])
         # For PyG<2.4:
         # torch.save(self.collate(data_list), self.processed_paths[0])
+
+    def get(self, idx):
+        if self.datalist is None or len(self.datalist)==0: self.datalist = list(torch.load(osp.join(self.processed_dir, self.processed_file_names[0])))
+        data = self.datalist[idx]
+        return data
 
 class LargeDataset(Dataset):
     def __init__(self, root, transform=None, pre_transform=None, pre_filter=None, datalist=None, num_workers=8, chunk_size=100, pickle_protocol=5, clean_keys=('is_data', 'rec_indices')):
@@ -68,6 +86,8 @@ class LargeDataset(Dataset):
             return [os.path.basename(path) for path in glob(os.path.join(self.processed_dir, '*.pt'))]
 
     def clean_data(self,data):
+
+        # Create a new graph and remove undesired attributes
         cleaned_data = Data()
         for key in data.keys():
             if key in (self.clean_keys): continue
@@ -78,15 +98,17 @@ class LargeDataset(Dataset):
 
     def save_graph(self,idx):
 
+        # Select data
         data = self.datalist[idx]
 
+        # Apply filters and transforms
         if self.pre_filter is not None and not self.pre_filter(data):
             return
-
         if self.pre_transform is not None:
             data = self.pre_transform(data)
 
-        torch.save(self.clean_data(data), osp.join(self.processed_dir, f'data_{idx}.pt'), pickle_protocol=self.pickle_protocol)
+        # Save data
+        torch.save(self.clean_data(data), osp.join(self.processed_dir, self.processed_file_names[idx]), pickle_protocol=self.pickle_protocol)
 
     def process(self):
 
@@ -94,7 +116,7 @@ class LargeDataset(Dataset):
         if self.datalist is None or len(self.datalist)==0:
             return
 
-        # Create processing pool for saving graphs
+        # Save graphs in several processes
         with multiprocessing.Pool(processes=min(len(self.datalist), self.num_workers)) as pool:
             try:
                 list(tqdm(pool.imap_unordered(self.save_graph, range(len(self.datalist)), self.chunk_size), total=len(self.datalist)))
@@ -111,10 +133,12 @@ class LargeDataset(Dataset):
         return len(self.processed_file_names)
 
     def get(self, idx):
-        data = torch.load(osp.join(self.processed_dir, f'data_{idx}.pt'))
-        if self.transform:
-            data = self.transform(data)
+        data = torch.load(osp.join(self.processed_dir, self.processed_file_names[idx]))
         return data
+
+@lru_cache(maxsize=16)
+def load_batch(path, weights_only=True):
+    return list(torch.load(path, weights_only=weights_only))
 
 class LazyDataset(Dataset):
     def __init__(self, root, transform=None, pre_transform=None, pre_filter=None, datalist=None, num_workers=8, chunk_size=100, pickle_protocol=5, clean_keys=('is_data', 'rec_indices'), batch_size=1000, use_cache=False, drop_last=False, weights_only=False):
@@ -150,6 +174,8 @@ class LazyDataset(Dataset):
             return [os.path.basename(path) for path in glob(os.path.join(self.processed_dir, 'data*.pt'))]
 
     def clean_data(self,data):
+
+        # Create a new graph and remove undesired attributes
         cleaned_data = Data()
         for key in data.keys():
             if key in (self.clean_keys): continue
@@ -160,19 +186,23 @@ class LazyDataset(Dataset):
 
     def save_graph_batch(self,idx):
 
+        # Set batch indices
         min_idx = idx*self.batch_size
         max_idx = min((idx+1)*self.batch_size, len(self.datalist)-1)
 
+        # Select batch
         data = self.datalist[min_idx:max_idx+1]
 
+        # Apply filters and transforms
         if self.pre_filter is not None:
             data = [d for d in data if not self.pre_filter(data)]
-
         if self.pre_transform is not None:
             data = [self.pre_transform(d) for d in data]
 
+        # Clean batch
         data = [self.clean_data(d) for d in data]
 
+        # Save batch
         torch.save(data, osp.join(self.processed_dir, self.processed_file_names[idx]), pickle_protocol=self.pickle_protocol)
 
     def process(self):
@@ -181,6 +211,7 @@ class LazyDataset(Dataset):
         if self.datalist is None or len(self.datalist)==0:
             return
 
+        # Save batches of graphs in several processes
         with multiprocessing.Pool(processes=min(self.num_batches, self.num_workers)) as pool:
             try:
                 list(tqdm(pool.imap_unordered(self.save_graph_batch, range(self.num_batches), self.chunk_size), total=self.num_batches))
@@ -197,16 +228,20 @@ class LazyDataset(Dataset):
         return len(self.processed_file_names)*self.batch_size
 
     def get(self, idx):
+
+        # Get indices
         batch_idx = idx // self.batch_size
         within_idx = idx % self.batch_size
 
+        # Load batch
         if batch_idx != self._loaded_batch_idx or not self.use_cache:
-            self._loaded_batch = torch.load(os.path.join(self.processed_dir, self.processed_file_names[batch_idx]), weights_only=self.weights_only)
-            self._loaded_batch_idx = batch_idx
-            
-        data = self._loaded_batch[within_idx]
-        if self.transform:
-            data = self.transform(data)
+            # self._loaded_batch = torch.load(os.path.join(self.processed_dir, self.processed_file_names[batch_idx]), weights_only=self.weights_only)
+            # self._loaded_batch_idx = batch_idx
+            # data = self._loaded_batch[within_idx]
+            _loaded_batch = load_batch(os.path.join(self.processed_dir, self.processed_file_names[batch_idx]), weights_only=self.weights_only)
+
+        # Load and transform data from batch
+        data = _loaded_batch[within_idx]
         return data
 
 def get_sample_weights(ds):
@@ -367,18 +402,9 @@ class ProjectionHead(nn.Module):
 
 #----------------------------------------------------------------------------------------------------#
 # TRAIN
-from torch_geometric.datasets import TUDataset
-from torch_geometric.loader import DataLoader
-from torch.optim.lr_scheduler import StepLR, LambdaLR
-from torch.utils.data import random_split, WeightedRandomSampler
-import numpy as np
-from sklearn.metrics import roc_curve, auc
-from scipy.stats import ks_2samp
-import matplotlib.pyplot as plt
-from sklearn.manifold import TSNE
-from torch.autograd import Variable
-import math
-
+from tqdm import tqdm
+import torch
+import torch.nn.functional as F
 
 def contrastive_loss(z1, z2, temperature=0.5):
 
@@ -508,7 +534,14 @@ def ret_soft_label(label, soft_labels, num_classes=2, device='cuda:0'): #NOTE: F
 
     return soft_label_for_batch
 
-def loss_titok(src_feats, src_logits, src_labels, tgt_feats, tgt_logits, soft_labels, loss_auc_alpha=0.5, loss_soft_temperature=2.0, confidence_threshold=0.8, num_classes=2, device='cuda:0', coeff_mmd=0.3, lambd=1.0, coeff_auc=0.01, coeff_soft=0.25):
+def loss_titok(src_feats, src_logits, src_labels, tgt_feats, tgt_logits, soft_labels, loss_auc_alpha=0.5, loss_soft_temperature=2.0, confidence_threshold=0.8, num_classes=2, pretraining=False, device='cuda:0', coeff_mmd=0.3, lambd=1.0, coeff_auc=0.01, coeff_soft=0.25):
+
+    # Source classification loss
+    loss_cls = F.cross_entropy(src_logits, src_labels)
+
+    # Check if pretraining for soft labels
+    if pretraining:
+        return loss_cls, loss_cls, torch.zeros(()), torch.zeros(()), torch.zeros(())
 
     # Apply softmax to get probabilities on target domain
     tgt_probs = F.softmax(tgt_logits, dim=1)
@@ -525,9 +558,6 @@ def loss_titok(src_feats, src_logits, src_labels, tgt_feats, tgt_logits, soft_la
 
     # Get soft labels
     soft_labels_batch = ret_soft_label(tgt_labels_confident, soft_labels, num_classes=num_classes, device=device)
-
-    # Source classification loss
-    loss_cls = F.cross_entropy(src_logits, src_labels)
     
     # AUC-style loss (exploss)
     loss_auc = exploss(F.softmax(src_logits, dim=1), src_labels, alpha=loss_auc_alpha)
@@ -688,28 +718,37 @@ def train_can(epochs=100, temp_fn=temp_fn, alpha_fn=alpha_fn):
 
     return clf_losses, can_losses, clf_accs, lrs
 
-def train_titok(encoder, clf, src_train_loader, tgt_train_loader, num_classes=2, soft_labels_temp=2, epochs=100, confidence_threshold=0.8, temp_fn=1.0, alpha_fn=1.0, lambda_fn=1.0, coeff_mmd=0.3, coeff_auc=0.01, coeff_soft=0.25, device='cuda:0', verbose=True):
+def train_titok(encoder, clf, src_train_loader, tgt_train_loader, src_val_loader, tgt_val_loader, num_classes=2, soft_labels_temp=2, epochs=100, confidence_threshold=0.8, temp_fn=1.0, alpha_fn=1.0, lambda_fn=1.0, coeff_mmd=0.3, coeff_auc=0.01, coeff_soft=0.25, pretrain_frac=0.2, device='cuda:0', verbose=True):
 
-    # Create soft labels #TODO: Pretrain first?
-    soft_labels = gen_soft_labels(num_classes, src_train_loader, encoder, clf, temperature=soft_labels_temp, device=device)
+    # Create soft labels #NOTE: Pretrain first
+    soft_labels = None if pretrain_frac>0.0 else gen_soft_labels(num_classes, src_train_loader, encoder, clf, temperature=soft_labels_temp, device=device)
     
     # Set models in train mode
     encoder.train()
     clf.train()
 
     # Set logging lists to return
-    total_losses       = []
-    total_losses_cls   = []
-    total_losses_auc   = []
-    total_losses_mmd   = []
-    total_losses_soft  = []
-    src_accs           = []
-    src_per_class_accs = []
-    src_balanced_accs  = []
-    lrs                = []
+    logs = {}
+    logs['train_losses']         = []
+    logs['train_losses_cls']     = []
+    logs['train_losses_auc']     = []
+    logs['train_losses_mmd']     = []
+    logs['train_losses_soft']    = []
+    logs['train_raw_accs']       = []
+    logs['train_per_class_accs'] = []
+    logs['train_balanced_accs']  = []
+    logs['val_losses']           = []
+    logs['val_losses_cls']       = []
+    logs['val_losses_auc']       = []
+    logs['val_losses_mmd']       = []
+    logs['val_losses_soft']      = []
+    logs['val_raw_accs']         = []
+    logs['val_per_class_accs']   = []
+    logs['val_balanced_accs']    = []
+    logs['lrs']                  = []
 
     # Loop training epochs
-    for epoch in range(1, epochs+1):
+    for epoch in tqdm(range(1, epochs+1)):
 
         # Check alpha function
         if callable(alpha_fn):
@@ -730,11 +769,20 @@ def train_titok(encoder, clf, src_train_loader, tgt_train_loader, num_classes=2,
             lambd = lambda_fn
         
         # Initialize losses
-        total_loss      = 0
-        total_loss_cls  = 0
-        total_loss_auc  = 0
-        total_loss_mmd  = 0
-        total_loss_soft = 0
+        train_loss      = 0
+        train_loss_cls  = 0
+        train_loss_auc  = 0
+        train_loss_mmd  = 0
+        train_loss_soft = 0
+        val_loss        = 0
+        val_loss_cls    = 0
+        val_loss_auc    = 0
+        val_loss_mmd    = 0
+        val_loss_soft   = 0
+
+        # Set soft labels after pretraining
+        if soft_labels is None and epoch/epochs>pretrain_frac:
+            soft_labels = gen_soft_labels(num_classes, src_train_loader, encoder, clf, temperature=soft_labels_temp, device=device)
 
         # Iterate over source and target loaders in parallel
         for src_batch, tgt_batch in zip(src_train_loader, tgt_train_loader):
@@ -754,195 +802,132 @@ def train_titok(encoder, clf, src_train_loader, tgt_train_loader, num_classes=2,
             tgt_logits = clf(tgt_feats)
 
             # Compute loss
-            loss, loss_cls, loss_mmd, loss_auc, loss_soft = loss_titok(src_feats, src_logits, src_labels, tgt_feats, tgt_logits, soft_labels, loss_auc_alpha=0.5, loss_soft_temperature=2.0, confidence_threshold=confidence_threshold, num_classes=2, device='cuda:0'):
+            pretraining = epoch/epochs<=pretrain_frac
+            loss, loss_cls, loss_mmd, loss_auc, loss_soft = loss_titok(src_feats, src_logits, src_labels, tgt_feats, tgt_logits, soft_labels, loss_auc_alpha=0.5, loss_soft_temperature=2.0, confidence_threshold=confidence_threshold, pretraining=pretraining, num_classes=2, device='cuda:0')
 
             # Backpropagate losses and update parameters
             loss.backward()
             optimizer.step()
 
-            # Pop losses
-            total_loss += loss.item()
-            total_loss_cls += loss_cls.item()
-            total_loss_mmd += loss_mmd.item()
-            total_loss_auc += loss_auc.item()
-            total_loss_soft += loss_soft.item()
+            # # Pop losses
+            # train_loss += loss.item()
+            # train_loss_cls += loss_cls.item()
+            # train_loss_mmd += loss_mmd.item()
+            # train_loss_auc += loss_auc.item()
+            # train_loss_soft += loss_soft.item()
 
-        # Evaluate model and put back in training mode
-        src_train_acc, src_train_per_class_acc, src_train_balanced_acc, _, _ = eval_model(src_train_loader)
-        src_val_acc, src_val_per_class_acc, src_val_balanced_acc, _, _ = eval_model(src_val_loader)
+        # Evaluate on training and test data and then put model back in training mode
+        train_loss, train_loss_cls, train_loss_mmd, train_loss_auc, train_loss_soft, train_raw_acc, train_per_class_acc, train_balanced_acc, train_preds, train_labels = val_titok(encoder, clf, src_train_loader, tgt_train_loader, soft_labels, num_classes=num_classes, confidence_threshold=confidence_threshold, temp=temp, alpha=alpha, lambd=lambd, coeff_mmd=coeff_mmd, coeff_auc=coeff_auc, coeff_soft=coeff_soft, device=device, verbose=verbose)
+        val_loss, val_loss_cls, val_loss_mmd, val_loss_auc, val_loss_soft, val_raw_acc, val_per_class_acc, val_balanced_acc, val_preds, val_labels = val_titok(encoder, clf, src_val_loader, tgt_val_loader, soft_labels, num_classes=num_classes, confidence_threshold=confidence_threshold, temp=temp, alpha=alpha, lambd=lambd, coeff_mmd=coeff_mmd, coeff_auc=coeff_auc, coeff_soft=coeff_soft, device=device, verbose=verbose)
         encoder.train()
         clf.train()
 
         # Append metrics for logging
-        total_losses.append(total_loss)
-        total_losses_cls.append(total_loss_cls)
-        total_losses_mmd.append(total_loss_mmd)
-        total_losses_auc.append(total_loss_auc)
-        total_losses_soft.append(total_loss_soft)
-        src_accs.append(src_acc)
-        src_per_class_accs.append(src_per_class_acc)
-        src_balanced_accs.append(src_balanced_acc)
+        logs['train_losses'].append(train_loss)
+        logs['train_losses_cls'].append(train_loss_cls)
+        logs['train_losses_mmd'].append(train_loss_mmd)
+        logs['train_losses_auc'].append(train_loss_auc)
+        logs['train_losses_soft'].append(train_loss_soft)
+        logs['train_raw_accs'].append(train_raw_acc)
+        logs['train_per_class_accs'].append(train_per_class_acc)
+        logs['train_balanced_accs'].append(train_balanced_acc)
+        logs['val_losses'].append(val_loss)
+        logs['val_losses_cls'].append(val_loss_cls)
+        logs['val_losses_mmd'].append(val_loss_mmd)
+        logs['val_losses_auc'].append(val_loss_auc)
+        logs['val_losses_soft'].append(val_loss_soft)
+        logs['val_raw_accs'].append(val_raw_acc)
+        logs['val_per_class_accs'].append(val_per_class_acc)
+        logs['val_balanced_accs'].append(val_balanced_acc)
+        logs['lrs'].append(optimizer.param_groups[0]['lr'])
 
-        # Log learning rate and step scheduler
-        lrs.append(optimizer.param_groups[0]['lr'])
+        # Step learning rate step scheduler
         if scheduler is not None: scheduler.step()
 
+        # Print training info
         if verbose: print(f'Epoch {epoch:03d} total_loss: {total_loss:.4f} loss_cls: {total_loss_cls:.4f} loss_mmd: {total_loss_mmd:.4f} loss_auc: {total_loss_auc:.4f} loss_soft: {total_loss_soft:.4f}')
 
-    return total_losses, total_losses_cls, total_losses_mmd, total_losses_auc, total_losses_soft, src_accs, src_per_class_accs, src_balanced_accs, lrs
-
-def val_titok(encoder, clf, src_val_loader, tgt_val_loader, num_classes=2, soft_labels_temp=2, epochs=100, confidence_threshold=0.8, temp_fn=1.0, alpha_fn=1.0, lambda_fn=1.0, coeff_mmd=0.3, coeff_auc=0.01, coeff_soft=0.25, device='cuda:0', verbose=True):
-
-    # Set models in eval mode
-    encoder.eval()
-    clf.eval()
-
-    # Create soft labels #TODO: Pretrain first?
-    soft_labels = gen_soft_labels(num_classes, src_train_loader, encoder, clf, temperature=soft_labels_temp, device=device)
-    
-    # Set models in train mode
-    encoder.train()
-    clf.train()
-
-    # Set logging lists to return
-    total_losses       = []
-    total_losses_cls   = []
-    total_losses_auc   = []
-    total_losses_mmd   = []
-    total_losses_soft  = []
-    src_accs           = []
-    src_per_class_accs = []
-    src_balanced_accs  = []
-    lrs                = []
-
-    # Loop training epochs
-    for epoch in range(1, epochs+1):
-
-        # Check alpha function
-        if callable(alpha_fn):
-            alpha = alpha_fn(epoch, epochs)
-        else:
-            alpha = alpha_fn
-
-        # Check temp function
-        if callable(temp_fn):
-            temp = temp_fn(epoch, epochs)
-        else:
-            temp = temp_fn
-
-        # Check lambda function
-        if callable(lambda_fn):
-            lambd = lambda_fn(epoch, epochs)
-        else:
-            lambd = lambda_fn
-        
-        # Initialize losses
-        total_loss      = 0
-        total_loss_cls  = 0
-        total_loss_auc  = 0
-        total_loss_mmd  = 0
-        total_loss_soft = 0
-
-        # Iterate over source and target loaders in parallel
-        for src_batch, tgt_batch in zip(src_train_loader, tgt_train_loader):
-
-            # Reset gradients
-            optimizer.zero_grad()
-
-            # Source graph forward pass
-            src_batch  = src_batch.to(device)
-            src_feats  = encoder(src_batch.x, src_batch.edge_index, src_batch.batch)
-            src_logits = clf(src_feats)
-            src_labels = src_batch.y
-
-            # Target graph forward pass
-            tgt_batch  = tgt_batch.to(device)
-            tgt_feats  = encoder(tgt_batch.x, tgt_batch.edge_index, tgt_batch.batch)
-            tgt_logits = clf(tgt_feats)
-
-            # Compute loss
-            loss, loss_cls, loss_mmd, loss_auc, loss_soft = loss_titok(src_feats, src_logits, src_labels, tgt_feats, tgt_logits, soft_labels, loss_auc_alpha=0.5, loss_soft_temperature=2.0, confidence_threshold=confidence_threshold, num_classes=2, device='cuda:0'):
-
-            # Backpropagate losses and update parameters
-            loss.backward()
-            optimizer.step()
-
-            # Pop losses
-            total_loss += loss.item()
-            total_loss_cls += loss_cls.item()
-            total_loss_mmd += loss_mmd.item()
-            total_loss_auc += loss_auc.item()
-            total_loss_soft += loss_soft.item()
-
-        # Evaluate model and put back in training mode
-        src_train_acc, src_train_per_class_acc, src_train_balanced_acc, _, _ = eval_model(src_train_loader)
-        src_val_acc, src_val_per_class_acc, src_val_balanced_acc, _, _ = eval_model(src_val_loader)
-        encoder.train()
-        clf.train()
-
-        # Append metrics for logging
-        total_losses.append(total_loss)
-        total_losses_cls.append(total_loss_cls)
-        total_losses_mmd.append(total_loss_mmd)
-        total_losses_auc.append(total_loss_auc)
-        total_losses_soft.append(total_loss_soft)
-        src_accs.append(src_acc)
-        src_per_class_accs.append(src_per_class_acc)
-        src_balanced_accs.append(src_balanced_acc)
-
-        # Log learning rate and step scheduler
-        lrs.append(optimizer.param_groups[0]['lr'])
-        if scheduler is not None: scheduler.step()
-
-        if verbose: print(f'Epoch {epoch:03d} total_loss: {total_loss:.4f} loss_cls: {total_loss_cls:.4f} loss_mmd: {total_loss_mmd:.4f} loss_auc: {total_loss_auc:.4f} loss_soft: {total_loss_soft:.4f}')
-
-    return total_losses, total_losses_cls, total_losses_mmd, total_losses_auc, total_losses_soft, src_accs, src_per_class_accs, src_balanced_accs, lrs
+    return logs, soft_labels
 
 #----------------------------------------------------------------------------------------------------#
 # EVAL
-def eval_model(encoder, clf, loader, num_classes=2, return_labels=False):
+import numpy as np
+import torch
+import torch.nn.functional as F
+from sklearn.metrics import roc_curve, auc
 
-    # Set models to evaluation mode
+def val_titok(encoder, clf, src_val_loader, tgt_val_loader, soft_labels, num_classes=2, confidence_threshold=0.8, temp=1.0, alpha=1.0, lambd=1.0, coeff_mmd=0.3, coeff_auc=0.01, coeff_soft=0.25, pretraining=False, device='cuda:0', verbose=True):
+    
+    # Set models in eval mode
     encoder.eval()
     clf.eval()
-
-    # Initialize variables and arrays
-    correct = 0
-    total   = 0
-    preds   = []
-    labels  = []
+        
+    # Initialize losses
+    total_loss      = 0
+    total_loss_cls  = 0
+    total_loss_auc  = 0
+    total_loss_mmd  = 0
+    total_loss_soft = 0
+    correct         = 0
+    total           = 0
+    preds           = []
+    labels          = []
     correct_per_class = torch.zeros(num_classes).to(device)
     total_per_class   = torch.zeros(num_classes).to(device)
 
-    # Loop data
+    # Iterate over source and target loaders in parallel
     with torch.no_grad():
-        for batch in loader:
-            batch  = batch.to(device)
-            feats  = encoder(batch.x, batch.edge_index, batch.batch)
-            logits = clf(feats)
-            preds  = F.softmax(logits,dim=1).argmax(dim=1)
-            correct += (preds == batch.y).sum().item()
-            total   += batch.y.size(0)
-            if return_labels:
-                preds.extend(preds.cpu().tolist())
-                labels.extend(batch.y.cpu().tolist())
+        for src_batch, tgt_batch in zip(src_val_loader, tgt_val_loader):
 
-            for i in range(len(preds)):
-                label = batch.y[i]
+            # Reset gradients
+            optimizer.zero_grad()
+
+            # Source graph forward pass
+            src_batch  = src_batch.to(device)
+            src_feats  = encoder(src_batch.x, src_batch.edge_index, src_batch.batch)
+            src_logits = clf(src_feats)
+            src_preds  = F.softmax(src_logits,dim=1).argmax(dim=1)
+            src_labels = src_batch.y
+
+            # Target graph forward pass
+            tgt_batch  = tgt_batch.to(device)
+            tgt_feats  = encoder(tgt_batch.x, tgt_batch.edge_index, tgt_batch.batch)
+            tgt_logits = clf(tgt_feats)
+
+            # Compute loss
+            loss, loss_cls, loss_mmd, loss_auc, loss_soft = loss_titok(src_feats, src_logits, src_labels, tgt_feats, tgt_logits, soft_labels, loss_auc_alpha=0.5, loss_soft_temperature=2.0, confidence_threshold=confidence_threshold, num_classes=2, pretraining=pretraining, device='cuda:0')
+
+            # Pop losses
+            train_loss += loss.item()
+            train_loss_cls += loss_cls.item()
+            train_loss_mmd += loss_mmd.item()
+            train_loss_auc += loss_auc.item()
+            train_loss_soft += loss_soft.item()
+
+            # Count correct predictions
+            correct += (src_preds == src_labels).sum().item()
+            total   += src_labels.size(0)
+            if return_labels:
+                all_src_preds.extend(src_preds.cpu().tolist())
+                all_labels.extend(src_labels.cpu().tolist())
+
+            for i in range(len(src_preds)):
+                label = src_labels[i]
                 total_per_class[label] += 1
                 if preds[i] == label:
                     correct_per_class[label] += 1
 
-    # Avoid division by zero
+    # Compute per-class accuracies, avoiding division by zero
     per_class_acc = correct_per_class / (total_per_class + 1e-8)
 
     # Compute average per-class accuracy
     valid_class_mask = total_per_class > 0
-    balanced_acc = per_class_acc[valid_class_mask].mean().item()
+    balanced_acc = per_class_acc[valid_class_mask].mean().item().cpu().tolist()
 
-    acc = correct / total
-    
-    return acc, per_class_acc.cpu().tolist(), balanced_acc, preds, labels
+    # Compute raw accuracy
+    raw_acc = correct / total
+
+    return total_loss, total_loss_cls, total_loss_mmd, total_loss_auc, total_loss_soft, raw_acc, per_class_acc, balanced_acc, preds, labels
 
 def eval_disc(src_loader,tgt_loader,return_labels=False):
 
@@ -951,6 +936,7 @@ def eval_disc(src_loader,tgt_loader,return_labels=False):
     disc.eval()
 
     # Initialize variables and arrays
+    loss    = 0
     correct = 0
     total   = 0
     preds   = []
@@ -971,23 +957,29 @@ def eval_disc(src_loader,tgt_loader,return_labels=False):
             tgt_logits = disc(tgt_feats)
 
             # Get domain classification predictions and loss
-            domain_feats  = torch.cat([src_feats, tgt_feats], dim=0)
-            domain_labels = torch.cat([
+            dom_feats  = torch.cat([src_feats, tgt_feats], dim=0)
+            dom_labels = torch.cat([
                 torch.zeros(src_feats.size(0), dtype=torch.long),
                 torch.ones(tgt_feats.size(0), dtype=torch.long)
             ], dim=0).to(device)
-            domain_logits = disc(domain_feats, alpha=alpha)
-            domain_loss   = F.cross_entropy(domain_logits, domain_labels)
-            domain_preds  = F.softmax(domain_logits,dim=0).argmax(dim=1)
+            dom_logits = disc(dom_feats, alpha=alpha)
+            dom_loss   = F.cross_entropy(dom_logits, dom_labels)
+            dom_preds  = F.softmax(dom_logits,dim=0).argmax(dim=1)
+
+            # Record total loss
+            loss += dom_loss.item()
 
             # Record domain correct predictions, logits, and labels
-            correct += (domain_preds == domain_labels).sum().item()
-            total   += domain_labels.size(0)
+            correct += (dom_preds == dom_labels).sum().item()
+            total   += dom_labels.size(0)
             if return_labels:
-                preds.extend(domain_preds.cpu().tolist())
-                labels.extend(domain_labels.cpu().tolist())
+                preds.extend(dom_preds.cpu().tolist())
+                labels.extend(dom_labels.cpu().tolist())
 
-    return correct / total, preds, domain_labels
+        # Compute accuracy
+        acc = correct / total
+
+    return loss, acc, preds, dom_labels
 
 def get_best_threshold(labels, preds):
 
@@ -1004,6 +996,9 @@ def get_best_threshold(labels, preds):
 
 #----------------------------------------------------------------------------------------------------#
 # PLOT
+import matplotlib.pyplot as plt
+from scipy.stats import ks_2samp
+from sklearn.manifold import TSNE
 
 # Plot metrics by epoch
 def plot_epoch_metrics(ax, epochs, title='', xlabel='', ylabel='', yscale=None, xscale=None, legend_loc=None, losses=[], plot_kwargs=[], normalize_to_max=True):
@@ -1159,6 +1154,10 @@ def plot_kinematics(axs, sg_kin, bg_kin, kin_xlabels=None, sg_hist_kwargs={'bins
 
 #----------------------------------------------------------------------------------------------------#
 # UI
+from torch_geometric.datasets import TUDataset
+from torch_geometric.loader import DataLoader
+from torch.optim.lr_scheduler import StepLR, LambdaLR
+from torch.utils.data import random_split, WeightedRandomSampler
 
 # Load full PROTEINS dataset
 DATASET_NAME = 'LAMBDAS'
@@ -1194,7 +1193,7 @@ tgt_ds = MyOwnDataset(
 
 #----- Create weighted data loader for source data -----#
 
-sampler_weighs = get_sampler_weights(src_ds)
+sampler_weights = get_sampler_weights(src_ds)
 
 sampler = WeightedRandomSampler(weights=sample_weights,
                                  num_samples=len(src_ds),
@@ -1270,7 +1269,7 @@ def temp_fn(epoch, max_epoch, t_min=0.07, t_max=0.5):
 temp_fn = 0.1
 
 def lambda_fn(epoch, epochs):
-    return 2 / (1 + math.exp(-10 * epoch / epochs)) - 1
+    return 2 / (1 + np.exp(-10 * epoch / epochs)) - 1
 
 total_losses, total_losses_cls, total_losses_mmd, total_losses_auc, total_losses_soft, src_accs, src_per_class_accs, src_balanced_accs, lrs = train(encoder, clf, src_loader, tgt_loader, num_classes=2, soft_labels_temp=2, epochs=epochs, temp_fn=temp_fn, alpha_fn=alpha_fn, lambda_fn=lambda_fn)
 
