@@ -44,10 +44,13 @@ class SmallDataset(InMemoryDataset):
         # torch.save(self.collate(data_list), self.processed_paths[0])
 
 class LargeDataset(Dataset):
-    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None, datalist=None, num_workers=8):
+    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None, datalist=None, num_workers=8, chunk_size=100, pickle_protocol=5, clean_keys=('is_data', 'rec_indices')):
         self.datalist = datalist
         self.root = root
         self.num_workers = num_workers
+        self.pickle_protocol = pickle_protocol
+        self.chunk_size = chunk_size
+        self.clean_keys = clean_keys
         super().__init__(root, transform, pre_transform, pre_filter)
 
     @property
@@ -64,6 +67,15 @@ class LargeDataset(Dataset):
         else:
             return [os.path.basename(path) for path in glob(os.path.join(self.processed_dir, '*.pt'))]
 
+    def clean_data(self,data):
+        cleaned_data = Data()
+        for key in data.keys():
+            if key in (self.clean_keys): continue
+            value = getattr(data, key)
+            if isinstance(value, torch.Tensor):
+                cleaned_data[key] = value.detach().cpu().clone()
+        return cleaned_data
+
     def save_graph(self,idx):
 
         data = self.datalist[idx]
@@ -74,7 +86,7 @@ class LargeDataset(Dataset):
         if self.pre_transform is not None:
             data = self.pre_transform(data)
 
-        torch.save(data, osp.join(self.processed_dir, f'data_{idx}.pt'))
+        torch.save(self.clean_data(data), osp.join(self.processed_dir, f'data_{idx}.pt'), pickle_protocol=self.pickle_protocol)
 
     def process(self):
 
@@ -82,14 +94,117 @@ class LargeDataset(Dataset):
         if self.datalist is None or len(self.datalist)==0:
             return
 
-        with multiprocessing.Pool(processes=min(len(self.datalist),self.num_workers)) as pool:
-            list(tqdm(pool.imap_unordered(self.save_graph, range(len(self.datalist))), total=len(self.datalist)))
+        # Create processing pool for saving graphs
+        with multiprocessing.Pool(processes=min(len(self.datalist), self.num_workers)) as pool:
+            try:
+                list(tqdm(pool.imap_unordered(self.save_graph, range(len(self.datalist)), self.chunk_size), total=len(self.datalist)))
+            except KeyboardInterrupt as e:
+                print("Caught KeyboardInterrupt, terminating workers")
+                pool.terminate()
+                pool.join()
+                print(e)
+            else:
+                pool.close()
+                pool.join()
 
     def len(self):
         return len(self.processed_file_names)
 
     def get(self, idx):
         data = torch.load(osp.join(self.processed_dir, f'data_{idx}.pt'))
+        if self.transform:
+            data = self.transform(data)
+        return data
+
+class LazyDataset(Dataset):
+    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None, datalist=None, num_workers=8, chunk_size=100, pickle_protocol=5, clean_keys=('is_data', 'rec_indices'), batch_size=1000, use_cache=False, drop_last=False, weights_only=False):
+        self.datalist = datalist
+        self.root = root
+        self.num_workers = num_workers
+        self.pickle_protocol = pickle_protocol
+        self.chunk_size = chunk_size
+        self.clean_keys = clean_keys
+        self.batch_size = batch_size
+        self._loaded_batch = None
+        self._loaded_batch_idx = -1
+        self.drop_last = drop_last
+        self.num_batches =  0
+        if self.datalist is not None and len(self.datalist)>0 and self.batch_size>0:
+            self.num_batches = len(self.datalist)//self.batch_size+(1 if len(self.datalist)%self.batch_size>0 and not self.drop_last else 0)
+        self.use_cache = use_cache
+        self.weights_only = weights_only
+        super().__init__(root, transform, pre_transform, pre_filter)
+
+    @property
+    def raw_file_names(self):
+        if self.datalist is not None and len(self.datalist)>0:
+            return [f'data{i}.pt' for i in range(self.num_batches)]
+        else:
+            return [os.path.basename(path) for path in glob(os.path.join(self.raw_dir, 'data*.pt'))]
+
+    @property
+    def processed_file_names(self):
+        if self.datalist is not None and len(self.datalist)>0:
+            return [f'data{i}.pt' for i in range(self.num_batches)]
+        else:
+            return [os.path.basename(path) for path in glob(os.path.join(self.processed_dir, 'data*.pt'))]
+
+    def clean_data(self,data):
+        cleaned_data = Data()
+        for key in data.keys():
+            if key in (self.clean_keys): continue
+            value = getattr(data, key)
+            if isinstance(value, torch.Tensor):
+                cleaned_data[key] = value.detach().cpu().clone()
+        return cleaned_data
+
+    def save_graph_batch(self,idx):
+
+        min_idx = idx*self.batch_size
+        max_idx = min((idx+1)*self.batch_size, len(self.datalist)-1)
+
+        data = self.datalist[min_idx:max_idx+1]
+
+        if self.pre_filter is not None:
+            data = [d for d in data if not self.pre_filter(data)]
+
+        if self.pre_transform is not None:
+            data = [self.pre_transform(d) for d in data]
+
+        data = [self.clean_data(d) for d in data]
+
+        torch.save(data, osp.join(self.processed_dir, self.processed_file_names[idx]), pickle_protocol=self.pickle_protocol)
+
+    def process(self):
+
+        # Check input data list
+        if self.datalist is None or len(self.datalist)==0:
+            return
+
+        with multiprocessing.Pool(processes=min(self.num_batches, self.num_workers)) as pool:
+            try:
+                list(tqdm(pool.imap_unordered(self.save_graph_batch, range(self.num_batches), self.chunk_size), total=self.num_batches))
+            except KeyBoardInterrupt as e:
+                print("Caught KeyBoardInterrupt, terminating workers")
+                pool.terminate()
+                pool.join()
+                print(e)
+            else:
+                pool.close()
+                pool.join()
+
+    def len(self):
+        return len(self.processed_file_names)*self.batch_size
+
+    def get(self, idx):
+        batch_idx = idx // self.batch_size
+        within_idx = idx % self.batch_size
+
+        if batch_idx != self._loaded_batch_idx or not self.use_cache:
+            self._loaded_batch = torch.load(os.path.join(self.processed_dir, self.processed_file_names[batch_idx]), weights_only=self.weights_only)
+            self._loaded_batch_idx = batch_idx
+            
+        data = self._loaded_batch[within_idx]
         if self.transform:
             data = self.transform(data)
         return data
@@ -393,6 +508,41 @@ def ret_soft_label(label, soft_labels, num_classes=2, device='cuda:0'): #NOTE: F
 
     return soft_label_for_batch
 
+def loss_titok(src_feats, src_logits, src_labels, tgt_feats, tgt_logits, soft_labels, loss_auc_alpha=0.5, loss_soft_temperature=2.0, confidence_threshold=0.8, num_classes=2, device='cuda:0', coeff_mmd=0.3, lambd=1.0, coeff_auc=0.01, coeff_soft=0.25):
+
+    # Apply softmax to get probabilities on target domain
+    tgt_probs = F.softmax(tgt_logits, dim=1)
+
+    # Get max class probabilities
+    confidences, pred_classes = torch.max(tgt_probs, dim=1)  # [B]
+
+    # Select samples with confidence above a threshold
+    mask = confidences >= confidence_threshold
+
+    # Select the logits and predicted labels of those confident samples
+    tgt_logits_confident = tgt_logits[mask]           # [B_confident, num_classes]
+    tgt_labels_confident = pred_classes[mask]         # [B_confident]
+
+    # Get soft labels
+    soft_labels_batch = ret_soft_label(tgt_labels_confident, soft_labels, num_classes=num_classes, device=device)
+
+    # Source classification loss
+    loss_cls = F.cross_entropy(src_logits, src_labels)
+    
+    # AUC-style loss (exploss)
+    loss_auc = exploss(F.softmax(src_logits, dim=1), src_labels, alpha=loss_auc_alpha)
+    
+    # Optional: MMD loss between source/target embeddings
+    loss_mmd = mmd_loss(src_feats, tgt_feats)
+    
+    # Target knowledge distillation loss (on confident samples only)
+    loss_soft = soft_label_loss(tgt_logits_confident, soft_labels_batch, temperature=loss_soft_temperature)
+    
+    # Combine losses
+    loss = loss_cls + coeff_mmd * lambd * loss_mmd + coeff_auc * loss_auc + coeff_soft * loss_soft
+
+    return loss, loss_cls, loss_mmd, loss_auc, loss_soft
+
 def train(epochs=100, alpha_fn=alpha_fn):
     encoder.train()
     clf.train()
@@ -538,10 +688,10 @@ def train_can(epochs=100, temp_fn=temp_fn, alpha_fn=alpha_fn):
 
     return clf_losses, can_losses, clf_accs, lrs
 
-def train_titok(encoder, clf, src_loader, tgt_loader, num_classes=2, soft_labels_temp=2, epochs=100, confidence_threshold=0.8, temp_fn=1.0, alpha_fn=1.0, lambda_fn=1.0, coeff_mmd=0.3, coeff_auc=0.01, coeff_soft=0.25, device='cuda:0', verbose=True):
+def train_titok(encoder, clf, src_train_loader, tgt_train_loader, num_classes=2, soft_labels_temp=2, epochs=100, confidence_threshold=0.8, temp_fn=1.0, alpha_fn=1.0, lambda_fn=1.0, coeff_mmd=0.3, coeff_auc=0.01, coeff_soft=0.25, device='cuda:0', verbose=True):
 
     # Create soft labels #TODO: Pretrain first?
-    soft_labels = gen_soft_labels(num_classes, src_loader, encoder, clf, temperature=soft_labels_temp, device=device)
+    soft_labels = gen_soft_labels(num_classes, src_train_loader, encoder, clf, temperature=soft_labels_temp, device=device)
     
     # Set models in train mode
     encoder.train()
@@ -587,7 +737,7 @@ def train_titok(encoder, clf, src_loader, tgt_loader, num_classes=2, soft_labels
         total_loss_soft = 0
 
         # Iterate over source and target loaders in parallel
-        for src_batch, tgt_batch in zip(src_loader, tgt_loader):
+        for src_batch, tgt_batch in zip(src_train_loader, tgt_train_loader):
 
             # Reset gradients
             optimizer.zero_grad()
@@ -603,41 +753,9 @@ def train_titok(encoder, clf, src_loader, tgt_loader, num_classes=2, soft_labels
             tgt_feats  = encoder(tgt_batch.x, tgt_batch.edge_index, tgt_batch.batch)
             tgt_logits = clf(tgt_feats)
 
-            #----- BEGIN TIToK -----#
+            # Compute loss
+            loss, loss_cls, loss_mmd, loss_auc, loss_soft = loss_titok(src_feats, src_logits, src_labels, tgt_feats, tgt_logits, soft_labels, loss_auc_alpha=0.5, loss_soft_temperature=2.0, confidence_threshold=confidence_threshold, num_classes=2, device='cuda:0'):
 
-            # Apply softmax to get probabilities on target domain
-            tgt_probs = F.softmax(tgt_logits, dim=1)
-
-            # Get max class probabilities
-            confidences, pred_classes = torch.max(tgt_probs, dim=1)  # [B]
-
-            # Select samples with confidence above a threshold
-            mask = confidences >= confidence_threshold
-
-            # Select the logits and predicted labels of those confident samples
-            tgt_logits_confident = tgt_logits[mask]           # [B_confident, num_classes]
-            tgt_labels_confident = pred_classes[mask]         # [B_confident]
-
-            # Get soft labels
-            soft_labels_batch = ret_soft_label(tgt_labels_confident, soft_labels, num_classes=num_classes, device=device)
-
-            # Source classification loss
-            loss_cls = F.cross_entropy(src_logits, src_labels)
-            
-            # AUC-style loss (exploss)
-            loss_auc = exploss(F.softmax(src_logits, dim=1), src_labels, alpha=0.5)
-            
-            # Optional: MMD loss between source/target embeddings
-            loss_mmd = mmd_loss(src_feats, tgt_feats)
-            
-            # Target knowledge distillation loss (on confident samples only)
-            loss_soft = soft_label_loss(tgt_logits_confident, soft_labels_batch, temperature=2.0)
-            
-            # Combine losses
-            loss = loss_cls + coeff_mmd * lambd * loss_mmd + coeff_auc * loss_auc + coeff_soft * loss_soft
-
-            #------- END TIToK -----#
-            
             # Backpropagate losses and update parameters
             loss.backward()
             optimizer.step()
@@ -650,7 +768,115 @@ def train_titok(encoder, clf, src_loader, tgt_loader, num_classes=2, soft_labels
             total_loss_soft += loss_soft.item()
 
         # Evaluate model and put back in training mode
-        src_acc, src_per_class_acc, src_balanced_acc, _, _ = eval_model(src_loader_unweighted)
+        src_train_acc, src_train_per_class_acc, src_train_balanced_acc, _, _ = eval_model(src_train_loader)
+        src_val_acc, src_val_per_class_acc, src_val_balanced_acc, _, _ = eval_model(src_val_loader)
+        encoder.train()
+        clf.train()
+
+        # Append metrics for logging
+        total_losses.append(total_loss)
+        total_losses_cls.append(total_loss_cls)
+        total_losses_mmd.append(total_loss_mmd)
+        total_losses_auc.append(total_loss_auc)
+        total_losses_soft.append(total_loss_soft)
+        src_accs.append(src_acc)
+        src_per_class_accs.append(src_per_class_acc)
+        src_balanced_accs.append(src_balanced_acc)
+
+        # Log learning rate and step scheduler
+        lrs.append(optimizer.param_groups[0]['lr'])
+        if scheduler is not None: scheduler.step()
+
+        if verbose: print(f'Epoch {epoch:03d} total_loss: {total_loss:.4f} loss_cls: {total_loss_cls:.4f} loss_mmd: {total_loss_mmd:.4f} loss_auc: {total_loss_auc:.4f} loss_soft: {total_loss_soft:.4f}')
+
+    return total_losses, total_losses_cls, total_losses_mmd, total_losses_auc, total_losses_soft, src_accs, src_per_class_accs, src_balanced_accs, lrs
+
+def val_titok(encoder, clf, src_val_loader, tgt_val_loader, num_classes=2, soft_labels_temp=2, epochs=100, confidence_threshold=0.8, temp_fn=1.0, alpha_fn=1.0, lambda_fn=1.0, coeff_mmd=0.3, coeff_auc=0.01, coeff_soft=0.25, device='cuda:0', verbose=True):
+
+    # Set models in eval mode
+    encoder.eval()
+    clf.eval()
+
+    # Create soft labels #TODO: Pretrain first?
+    soft_labels = gen_soft_labels(num_classes, src_train_loader, encoder, clf, temperature=soft_labels_temp, device=device)
+    
+    # Set models in train mode
+    encoder.train()
+    clf.train()
+
+    # Set logging lists to return
+    total_losses       = []
+    total_losses_cls   = []
+    total_losses_auc   = []
+    total_losses_mmd   = []
+    total_losses_soft  = []
+    src_accs           = []
+    src_per_class_accs = []
+    src_balanced_accs  = []
+    lrs                = []
+
+    # Loop training epochs
+    for epoch in range(1, epochs+1):
+
+        # Check alpha function
+        if callable(alpha_fn):
+            alpha = alpha_fn(epoch, epochs)
+        else:
+            alpha = alpha_fn
+
+        # Check temp function
+        if callable(temp_fn):
+            temp = temp_fn(epoch, epochs)
+        else:
+            temp = temp_fn
+
+        # Check lambda function
+        if callable(lambda_fn):
+            lambd = lambda_fn(epoch, epochs)
+        else:
+            lambd = lambda_fn
+        
+        # Initialize losses
+        total_loss      = 0
+        total_loss_cls  = 0
+        total_loss_auc  = 0
+        total_loss_mmd  = 0
+        total_loss_soft = 0
+
+        # Iterate over source and target loaders in parallel
+        for src_batch, tgt_batch in zip(src_train_loader, tgt_train_loader):
+
+            # Reset gradients
+            optimizer.zero_grad()
+
+            # Source graph forward pass
+            src_batch  = src_batch.to(device)
+            src_feats  = encoder(src_batch.x, src_batch.edge_index, src_batch.batch)
+            src_logits = clf(src_feats)
+            src_labels = src_batch.y
+
+            # Target graph forward pass
+            tgt_batch  = tgt_batch.to(device)
+            tgt_feats  = encoder(tgt_batch.x, tgt_batch.edge_index, tgt_batch.batch)
+            tgt_logits = clf(tgt_feats)
+
+            # Compute loss
+            loss, loss_cls, loss_mmd, loss_auc, loss_soft = loss_titok(src_feats, src_logits, src_labels, tgt_feats, tgt_logits, soft_labels, loss_auc_alpha=0.5, loss_soft_temperature=2.0, confidence_threshold=confidence_threshold, num_classes=2, device='cuda:0'):
+
+            # Backpropagate losses and update parameters
+            loss.backward()
+            optimizer.step()
+
+            # Pop losses
+            total_loss += loss.item()
+            total_loss_cls += loss_cls.item()
+            total_loss_mmd += loss_mmd.item()
+            total_loss_auc += loss_auc.item()
+            total_loss_soft += loss_soft.item()
+
+        # Evaluate model and put back in training mode
+        src_train_acc, src_train_per_class_acc, src_train_balanced_acc, _, _ = eval_model(src_train_loader)
+        src_val_acc, src_val_per_class_acc, src_val_balanced_acc, _, _ = eval_model(src_val_loader)
         encoder.train()
         clf.train()
 
