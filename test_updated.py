@@ -1,6 +1,6 @@
 #----------------------------------------------------------------------------------------------------#
 # DATA
-from torch_geometric.data import Dataset, InMemoryDataset, download_url
+from torch_geometric.data import Data, Dataset, InMemoryDataset, download_url
 import os.path as osp
 from glob import glob
 import multiprocessing
@@ -56,10 +56,10 @@ class SmallDataset(InMemoryDataset):
         # For PyG<2.4:
         # torch.save(self.collate(data_list), self.processed_paths[0])
 
-    def get(self, idx):
-        if self.datalist is None or len(self.datalist)==0: self.datalist = list(torch.load(osp.join(self.processed_dir, self.processed_file_names[0])))
-        data = self.datalist[idx]
-        return data
+    # def get(self, idx):
+    #     if self.datalist is None or len(self.datalist)==0: self.datalist = list(torch.load(osp.join(self.processed_dir, self.processed_file_names[0])))
+    #     data = self.datalist[idx]
+    #     return data
 
 class LargeDataset(Dataset):
     def __init__(self, root, transform=None, pre_transform=None, pre_filter=None, datalist=None, num_workers=8, chunk_size=100, pickle_protocol=5, clean_keys=('is_data', 'rec_indices')):
@@ -727,11 +727,15 @@ def train_can(epochs=100, temp_fn=temp_fn, alpha_fn=0.1):
 
     return clf_losses, can_losses, clf_accs, lrs
 
-def train_titok(encoder, clf, src_train_loader, tgt_train_loader, src_val_loader, tgt_val_loader, num_classes=2, soft_labels_temp=2, epochs=100, confidence_threshold=0.8, temp_fn=0.1, alpha_fn=0.1, lambda_fn=lambda_fn, coeff_mmd=0.3, coeff_auc=0.01, coeff_soft=0.25, pretrain_frac=0.2, device='cuda:0', verbose=True):
+def train_titok(encoder, clf, src_train_loader, tgt_train_loader, src_val_loader, tgt_val_loader, num_classes=2, soft_labels_temp=2, nepochs=100, confidence_threshold=0.8, temp_fn=0.1, alpha_fn=0.1, lambda_fn=lambda_fn, coeff_mmd=0.3, coeff_auc=0.01, coeff_soft=0.25, pretrain_frac=0.2, device='cuda:0', verbose=True):
 
     # Create soft labels #NOTE: Pretrain first
-    soft_labels = None if pretrain_frac>0.0 else gen_soft_labels(num_classes, src_train_loader, encoder, clf, temperature=soft_labels_temp, device=device)
-    
+    soft_labels = None
+    if pretrain_frac<=0.0:
+        soft_labels = gen_soft_labels(
+            num_classes, src_train_loader, encoder, clf, temperature=soft_labels_temp, device=device
+        )
+
     # Set models in train mode
     encoder.train()
     clf.train()
@@ -743,54 +747,42 @@ def train_titok(encoder, clf, src_train_loader, tgt_train_loader, src_val_loader
     logs['train_losses_auc']     = []
     logs['train_losses_mmd']     = []
     logs['train_losses_soft']    = []
-    logs['train_raw_accs']       = []
-    logs['train_per_class_accs'] = []
-    logs['train_balanced_accs']  = []
+    logs['train_accs_raw']       = []
+    logs['train_accs_per_class'] = []
+    logs['train_accs_balanced']  = []
     logs['val_losses']           = []
     logs['val_losses_cls']       = []
     logs['val_losses_auc']       = []
     logs['val_losses_mmd']       = []
     logs['val_losses_soft']      = []
-    logs['val_raw_accs']         = []
-    logs['val_per_class_accs']   = []
-    logs['val_balanced_accs']    = []
+    logs['val_accs_raw']         = []
+    logs['val_accs_per_class']   = []
+    logs['val_accs_balanced']    = []
     logs['lrs']                  = []
 
     # Loop training epochs
-    for epoch in tqdm(range(1, epochs+1)):
+    for epoch in tqdm(range(1, nepochs+1)):
 
         # Check alpha function
         if callable(alpha_fn):
-            alpha = alpha_fn(epoch, epochs)
+            alpha = alpha_fn(epoch, nepochs)
         else:
             alpha = alpha_fn
 
         # Check temp function
         if callable(temp_fn):
-            temp = temp_fn(epoch, epochs)
+            temp = temp_fn(epoch, nepochs)
         else:
             temp = temp_fn
 
         # Check lambda function
         if callable(lambda_fn):
-            lambd = lambda_fn(epoch, epochs)
+            lambd = lambda_fn(epoch, nepochs)
         else:
             lambd = lambda_fn
-        
-        # Initialize losses
-        train_loss      = 0
-        train_loss_cls  = 0
-        train_loss_auc  = 0
-        train_loss_mmd  = 0
-        train_loss_soft = 0
-        val_loss        = 0
-        val_loss_cls    = 0
-        val_loss_auc    = 0
-        val_loss_mmd    = 0
-        val_loss_soft   = 0
 
         # Set soft labels after pretraining
-        pretraining = (epoch/epochs<=pretrain_frac and pretrain_frac>0.0)
+        pretraining = (epoch/nepochs<=pretrain_frac and pretrain_frac>0.0)
         if soft_labels is None and not pretraining:
             soft_labels = gen_soft_labels(num_classes, src_train_loader, encoder, clf, temperature=soft_labels_temp, device=device)
 
@@ -818,36 +810,39 @@ def train_titok(encoder, clf, src_train_loader, tgt_train_loader, src_val_loader
             loss.backward()
             optimizer.step()
 
-            # # Pop losses
-            # train_loss += loss.item()
-            # train_loss_cls += loss_cls.item()
-            # train_loss_mmd += loss_mmd.item()
-            # train_loss_auc += loss_auc.item()
-            # train_loss_soft += loss_soft.item()
-
-        # Evaluate on training and test data and then put model back in training mode
-        train_loss, train_loss_cls, train_loss_mmd, train_loss_auc, train_loss_soft, train_raw_acc, train_per_class_acc, train_balanced_acc, train_preds, train_labels = val_titok(encoder, clf, src_train_loader, tgt_train_loader, soft_labels, pretraining=pretraining, num_classes=num_classes, confidence_threshold=confidence_threshold, temp=temp, alpha=alpha, lambd=lambd, coeff_mmd=coeff_mmd, coeff_auc=coeff_auc, coeff_soft=coeff_soft, device=device, verbose=verbose)
-        val_loss, val_loss_cls, val_loss_mmd, val_loss_auc, val_loss_soft, val_raw_acc, val_per_class_acc, val_balanced_acc, val_preds, val_labels = val_titok(encoder, clf, src_val_loader, tgt_val_loader, soft_labels, pretraining=pretraining, num_classes=num_classes, confidence_threshold=confidence_threshold, temp=temp, alpha=alpha, lambd=lambd, coeff_mmd=coeff_mmd, coeff_auc=coeff_auc, coeff_soft=coeff_soft, device=device, verbose=verbose)
+        # Evaluate on training and vallidation data and then put model back in training mode
+        train_logs = val_titok(
+            encoder, clf, src_train_loader, tgt_train_loader, soft_labels,
+            pretraining=pretraining, num_classes=num_classes, confidence_threshold=confidence_threshold,
+            temp=temp, alpha=alpha, lambd=lambd, coeff_mmd=coeff_mmd, coeff_auc=coeff_auc,
+            coeff_soft=coeff_soft, device=device, verbose=verbose
+        )
+        val_logs = val_titok(
+            encoder, clf, src_val_loader, tgt_val_loader, soft_labels,
+            pretraining=pretraining, num_classes=num_classes, confidence_threshold=confidence_threshold,
+            temp=temp, alpha=alpha, lambd=lambd, coeff_mmd=coeff_mmd, coeff_auc=coeff_auc,
+            coeff_soft=coeff_soft, device=device, verbose=verbose
+        )
         encoder.train()
         clf.train()
 
         # Append metrics for logging
-        logs['train_losses'].append(train_loss)
-        logs['train_losses_cls'].append(train_loss_cls)
-        logs['train_losses_mmd'].append(train_loss_mmd)
-        logs['train_losses_auc'].append(train_loss_auc)
-        logs['train_losses_soft'].append(train_loss_soft)
-        logs['train_raw_accs'].append(train_raw_acc)
-        logs['train_per_class_accs'].append(train_per_class_acc)
-        logs['train_balanced_accs'].append(train_balanced_acc)
-        logs['val_losses'].append(val_loss)
-        logs['val_losses_cls'].append(val_loss_cls)
-        logs['val_losses_mmd'].append(val_loss_mmd)
-        logs['val_losses_auc'].append(val_loss_auc)
-        logs['val_losses_soft'].append(val_loss_soft)
-        logs['val_raw_accs'].append(val_raw_acc)
-        logs['val_per_class_accs'].append(val_per_class_acc)
-        logs['val_balanced_accs'].append(val_balanced_acc)
+        logs['train_losses'].append(train_logs["loss"])
+        logs['train_losses_cls'].append(train_logs["loss_cls"])
+        logs['train_losses_mmd'].append(train_logs["loss_mmd"])
+        logs['train_losses_auc'].append(train_logs["loss_auc"])
+        logs['train_losses_soft'].append(train_logs["loss_soft"])
+        logs['train_accs_raw'].append(train_logs["acc_raw"])
+        logs['train_accs_per_class'].append(train_logs["acc_per_class"])
+        logs['train_accs_balanced'].append(train_logs["acc_balanced"])
+        logs['val_losses'].append(val_logs["loss"])
+        logs['val_losses_cls'].append(val_logs["loss_cls"])
+        logs['val_losses_mmd'].append(val_logs["loss_mmd"])
+        logs['val_losses_auc'].append(val_logs["loss_auc"])
+        logs['val_losses_soft'].append(val_logs["loss_soft"])
+        logs['val_accs_raw'].append(val_logs["acc_raw"])
+        logs['val_accs_per_class'].append(val_logs["acc_per_class"])
+        logs['val_accs_balanced'].append(val_logs["acc_balanced"])
         logs['lrs'].append(optimizer.param_groups[0]['lr'])
 
         # Step learning rate step scheduler
@@ -864,7 +859,6 @@ def train_titok(encoder, clf, src_train_loader, tgt_train_loader, src_val_loader
 
     return logs, soft_labels
     
-
 #----------------------------------------------------------------------------------------------------#
 # EVAL
 import numpy as np
@@ -878,14 +872,15 @@ def val_titok(encoder, clf, src_val_loader, tgt_val_loader, soft_labels, pretrai
     encoder.eval()
     clf.eval()
         
-    # Initialize losses
-    train_loss        = 0
-    train_loss_cls    = 0
-    train_loss_auc    = 0
-    train_loss_mmd    = 0
-    train_loss_soft   = 0
+    # Initialize variables
+    total_loss        = 0
+    total_loss_cls    = 0
+    total_loss_auc    = 0
+    total_loss_mmd    = 0
+    total_loss_soft   = 0
     correct           = 0
     total             = 0
+    all_src_probs     = []
     all_src_preds     = []
     all_src_labels    = []
     correct_per_class = torch.zeros(num_classes).to(device)
@@ -902,7 +897,8 @@ def val_titok(encoder, clf, src_val_loader, tgt_val_loader, soft_labels, pretrai
             src_batch  = src_batch.to(device)
             src_feats  = encoder(src_batch.x, src_batch.edge_index, src_batch.batch)
             src_logits = clf(src_feats)
-            src_preds  = F.softmax(src_logits,dim=1).argmax(dim=1)
+            src_probs  = F.softmax(src_logits,dim=1)
+            src_preds  = src_probs.argmax(dim=1)
             src_labels = src_batch.y
 
             # Target graph forward pass
@@ -911,19 +907,24 @@ def val_titok(encoder, clf, src_val_loader, tgt_val_loader, soft_labels, pretrai
             tgt_logits = clf(tgt_feats)
 
             # Compute loss
-            loss, loss_cls, loss_mmd, loss_auc, loss_soft = loss_titok(src_feats, src_logits, src_labels, tgt_feats, tgt_logits, soft_labels, loss_auc_alpha=0.5, loss_soft_temperature=2.0, confidence_threshold=confidence_threshold, num_classes=num_classes, pretraining=pretraining, device=device)
+            loss, loss_cls, loss_mmd, loss_auc, loss_soft = loss_titok(
+                src_feats, src_logits, src_labels, tgt_feats, tgt_logits, soft_labels,
+                loss_auc_alpha=0.5, loss_soft_temperature=2.0, confidence_threshold=confidence_threshold,
+                num_classes=num_classes, pretraining=pretraining, device=device
+            )
 
             # Pop losses
-            train_loss      += loss.item()
-            train_loss_cls  += loss_cls.item()
-            train_loss_mmd  += loss_mmd.item()
-            train_loss_auc  += loss_auc.item()
-            train_loss_soft += loss_soft.item()
+            total_loss      += loss.item()
+            total_loss_cls  += loss_cls.item()
+            total_loss_mmd  += loss_mmd.item()
+            total_loss_auc  += loss_auc.item()
+            total_loss_soft += loss_soft.item()
 
             # Count correct predictions
             correct += (src_preds == src_labels).sum().item()
             total   += src_labels.size(0)
             if return_labels:
+                all_src_probs.extend(src_probs.cpu().tolist())
                 all_src_preds.extend(src_preds.cpu().tolist())
                 all_src_labels.extend(src_labels.cpu().tolist())
 
@@ -934,16 +935,35 @@ def val_titok(encoder, clf, src_val_loader, tgt_val_loader, soft_labels, pretrai
                     correct_per_class[label] += 1
 
     # Compute per-class accuracies, avoiding division by zero
-    per_class_acc = correct_per_class / (total_per_class + 1e-8)
+    acc_per_class = correct_per_class / (total_per_class + 1e-8)
 
     # Compute average per-class accuracy
     valid_class_mask = total_per_class > 0
-    balanced_acc = per_class_acc[valid_class_mask].mean().item()
+    acc_balanced = acc_per_class[valid_class_mask].mean().item()
 
     # Compute raw accuracy
-    raw_acc = correct / total
+    acc_raw = correct / total
 
-    return train_loss, train_loss_cls, train_loss_mmd, train_loss_auc, train_loss_soft, raw_acc, per_class_acc.cpu().tolist(), balanced_acc, all_src_preds, all_src_labels
+    # Convert lists to torch tensors
+    all_src_probs = torch.tensor(all_src_probs)
+    all_src_preds = torch.tensor(all_src_preds)
+    all_src_labels = torch.tensor(all_src_labels)
+
+    logs = {
+        "loss": total_loss,
+        "loss_cls": total_loss_cls,
+        "loss_mmd": total_loss_mmd,
+        "loss_auc": total_loss_auc,
+        "loss_soft": total_loss_soft,
+        "acc_raw": acc_raw,
+        "acc_per_class": acc_per_class.cpu().tolist(),
+        "acc_balanced": acc_balanced,
+        "probs": all_src_probs,
+        "preds": all_src_preds,
+        "labels": all_src_labels,
+    }
+
+    return logs
 
 def eval_disc(src_loader,tgt_loader,return_labels=False):
 
@@ -955,6 +975,7 @@ def eval_disc(src_loader,tgt_loader,return_labels=False):
     loss    = 0
     correct = 0
     total   = 0
+    probs   = []
     preds   = []
     labels  = []
 
@@ -980,7 +1001,8 @@ def eval_disc(src_loader,tgt_loader,return_labels=False):
             ], dim=0).to(device)
             dom_logits = disc(dom_feats, alpha=alpha)
             dom_loss   = F.cross_entropy(dom_logits, dom_labels)
-            dom_preds  = F.softmax(dom_logits,dim=0).argmax(dim=1)
+            dom_probs  = F.softmax(dom_logits,dim=0)
+            dom_preds  = dom_probs.argmax(dim=1)
 
             # Record total loss
             loss += dom_loss.item()
@@ -989,18 +1011,32 @@ def eval_disc(src_loader,tgt_loader,return_labels=False):
             correct += (dom_preds == dom_labels).sum().item()
             total   += dom_labels.size(0)
             if return_labels:
+                probs.extend(dom_probs.cpu().tolist())
                 preds.extend(dom_preds.cpu().tolist())
                 labels.extend(dom_labels.cpu().tolist())
 
         # Compute accuracy
         acc = correct / total
 
-    return loss, acc, preds, dom_labels
+        # Convert lists to torch tensors
+        probs = torch.tensor(probs)
+        preds = torch.tensor(preds)
+        labels = torch.tensor(labels)
 
-def get_best_threshold(labels, preds):
+    logs = {
+        'loss':loss,
+        'acc':acc,
+        'probs':probs,
+        'preds':preds,
+        'dom_labels':dom_labels
+    }
+
+    return logs
+
+def get_best_threshold(labels, probs):
 
     # Compute ROC curve and AUC
-    fpr, tpr, thresholds = roc_curve(labels, outs)
+    fpr, tpr, thresholds = roc_curve(labels, probs)
     roc_auc = auc(fpr, tpr)
 
     # Compute Figure of Merit: FOM = TPR / sqrt(TPR + FPR)
@@ -1008,7 +1044,17 @@ def get_best_threshold(labels, preds):
     best_idx = np.argmax(fom)
     best_fpr, best_tpr, best_fom, best_thr = fpr[best_idx], tpr[best_idx], fom[best_idx], thresholds[best_idx]
 
-    return fpr, tpr, thresholds, roc_auc, best_fpr, best_tpr, beest_fom, best_thr
+    logs = {
+        'fpr':fpr,
+        'tpr':tpr,
+        'roc_auc':roc_auc,
+        'best_fpr':best_fpr,
+        'best_tpr':best_tpr,
+        'best_fom':best_fom,
+        'best_thr':best_thr
+    }
+
+    return logs, thresholds
 
 #----------------------------------------------------------------------------------------------------#
 # PLOT
@@ -1017,7 +1063,7 @@ from scipy.stats import ks_2samp
 from sklearn.manifold import TSNE
 
 # Plot metrics by epoch
-def plot_epoch_metrics(ax, epochs, title='', xlabel='', ylabel='', yscale=None, xscale=None, legend_loc=None, losses=[], plot_kwargs=[], normalize_to_max=True):
+def plot_epoch_metrics(ax, nepochs, title='', xlabel='', ylabel='', yscale=None, xscale=None, legend_bbox_to_anchor=(1.05, 1), legend_loc='upper left', epoch_metrics=[], plot_kwargs=[], normalize_to_max=True):
     
     # Check dimensions of metrics and plotting arguments lists
     if len(epoch_metrics)!=len(plot_kwargs):
@@ -1025,18 +1071,27 @@ def plot_epoch_metrics(ax, epochs, title='', xlabel='', ylabel='', yscale=None, 
 
     # Loop and plot metrics
     for idx, epoch_metric in enumerate(epoch_metrics):
-        ax.plot(range(epochs), epoch_metric/np.max(epoch_metric) if normalize_to_max else epoch_metric, **plot_kwargs[idx])
+        ax.plot(range(nepochs), epoch_metric/np.max(epoch_metric) if normalize_to_max else epoch_metric, **plot_kwargs[idx])
 
     # Set up plot
     ax.set_title(title, usetex=True)
     ax.set_xlabel(xlabel, usetex=True)
     ax.set_ylabel(ylabel, usetex=True)
-    if yscle is not None: ax.set_yscale(yscale)
-    if xscale is not None: ax.set_xscale(xscale)
-    if legend_loc is not None: ax.legend(loc=legend_loc)
+    if yscale is not None:
+        ax.set_yscale(yscale)
+    if xscale is not None:
+        ax.set_xscale(xscale)
+    if legend_loc is not None and legend_bbox_to_anchor is None:
+        ax.legend(loc=legend_loc)
+    if legend_loc is not None and legend_bbox_to_anchor is not None:
+        if np.any([el>1.0 or el<0.0 for el in legend_bbox_to_anchor]):
+            box = ax.get_position()
+            ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
+        ax.legend(bbox_to_anchor=legend_bbox_to_anchor, loc=legend_loc)
 
 # Plot ROC
-def plot_roc(ax, fpr, tpr, roc_auc, best_fpr, best_tpr, best_fom, best_thr):
+def plot_roc(ax, fpr=[], tpr=[], roc_auc=0.0, best_fpr=0.0, best_tpr=0.0, best_fom=0.0, best_thr=0.0):
+    ax.plot([0, 1], [0, 1], color='navy', lw=1, linestyle='--')
     ax.plot(fpr, tpr, color='darkorange', lw=2, label=f"ROC curve (AUC = {roc_auc:.2f})")
     ax.scatter(best_fpr, best_tpr, color='red', marker='*', s=100, label=f'Max FOM \n(FOM={best_fom:.2f})\n(Thr={best_thr:.2f})')
     ax.set_xlim([0.0, 1.0])
@@ -1048,10 +1103,11 @@ def plot_roc(ax, fpr, tpr, roc_auc, best_fpr, best_tpr, best_fom, best_thr):
     ax.grid(True)
 
 # Plot domain predictions with KS statistic
-def plot_domain_preds(ax, src_preds, tgt_preds):
+def plot_domain_preds(ax, src_preds, tgt_preds, bins=50):
     stat, p_value = ks_2samp(src_preds, tgt_preds)
-    ax.hist(src_preds, bins=50, range=(0, 1), alpha=0.6, label="Source Domain", color='skyblue', density=True)
-    ax.hist(tgt_preds, bins=50, range=(0, 1), alpha=0.6, label="Target Domain", color='salmon', density=True)
+    ax.hist(src_preds, bins=bins, range=(0, 1), alpha=0.6, label="Source Domain", color='skyblue', density=True)
+    ax.hist(tgt_preds, bins=bins, range=(0, 1), alpha=0.6, label="Target Domain", color='salmon', density=True)
+    ax.plot([], [], ' ', label=f"KS test statistic: {stat:.4f}, p-value: {p_value:.4g}")
     ax.set_xlim([0.0, 1.0])
     ax.set_title("Classifier Output Distribution")
     ax.set_xlabel("Predicted Probability")
@@ -1111,8 +1167,8 @@ def get_kinematics(encoder, clf, dataloader, threshold=0.7, device='cuda',
     """
     encoder.eval()
     clf.eval()
-    all_kin_signal = []
-    all_kin_bkg = []
+    all_sg_kin = []
+    all_bg_kin = []
 
     with torch.no_grad():
         for data in dataloader:
@@ -1129,44 +1185,57 @@ def get_kinematics(encoder, clf, dataloader, threshold=0.7, device='cuda',
 
             for k, cls in zip(selected_kinematics, selected_classes):
                 if cls.item() == class_idx_signal:
-                    all_kin_signal.append(k.cpu())
+                    all_sg_kin.append(k.cpu())
                 elif cls.item() == class_idx_background:
-                    all_kin_bkg.append(k.cpu())
+                    all_bg_kin.append(k.cpu())
 
-    if not all_kin_signal or not all_kin_bkg:
+    if not all_sg_kin or not all_bg_kin:
         print("Not enough events passed the threshold to plot.")
-        return
+        return all_sg_kin, all_bg_kin
 
     # Convert to tensors
-    kin_signal = torch.stack(all_kin_signal)  # [N_signal, num_kin_vars]
-    kin_bkg = torch.stack(all_kin_bkg)        # [N_bkg, num_kin_vars]
+    sg_kin = torch.stack(all_sg_kin)  # [n_sg, n_kin]
+    bg_kin = torch.stack(all_bg_kin)        # [n_bg, n_kin]
 
     return sg_kin, bg_kin
 
-def plot_kinematics(axs, sg_kin, bg_kin, kin_xlabels=None, sg_hist_kwargs={'bins':50, 'alpha':0.6, 'label':'Signal', 'color':'C0', 'density':True}, g_hist_kwargs={'bins':50, 'alpha':0.6, 'label':'Background', 'color':'C1', 'density':True}):
+def plot_kinematics(axs, sg_kin, bg_kin, kin_indices=None, kin_xlabels=None,
+                    sg_hist_kwargs={'bins':50, 'alpha':0.6, 'label':'Signal', 'color':'C0', 'density':True},
+                    bg_hist_kwargs={'bins':50, 'alpha':0.6, 'label':'Background', 'color':'C1', 'density':True}):
     
     # Set number of kinematics
-    n_kin = sg_kin.size(1)
+    n_kin = sg_kin.size(1) if type(sg_kin)==torch.Tensor else 0
+    if kin_indices is None:
+        kin_indices = [i for i in range(n_kin)]
+
+    if n_kin<len(kin_indices) or len(kin_indices)!=len(kin_xlabels):
+        raise ValueError(
+            'Number of kinematics is not consistent ' +
+            f'sg_kin.size(1) = {n_kin:d} ,' +
+            f'len(kin_indices) = {len(kin_indices):d} ,' +
+            f'len(kin_xlabels) = {len(kin_xlabels):d}')
 
     # Set kinematics labels
     if kin_xlabels is None:
-        kin_xlabels = [f"Kin_{i}" for i in range(num_kin_vars)]
+        kin_xlabels = [f"Kin_{i}" for i in kin_indices]
 
     # Set and flatten axes
     if axs is None or len(axs)==0:
-        fig, axs = plt.subplots(nrows=(n_kin + 1) // 2, ncols=2, figsize=(14, 4 * ((n_kin + 1) // 2)))
+        fig, axs = plt.subplots(nrows=(len(kin_indices) + 1) // 2, ncols=2, figsize=(14, 4 * ((len(kin_indices) + 1) // 2)))
     axs = axs.flatten()
 
     # Turn off unused axes
-    for idx in range(len(axs) - len(num_kin_vars)):
+    for idx in range(len(axs) - len(kin_indices)):
         axs[-1 - idx].axis('off')
 
     # Loop and plot kinematics
-    for i in range(n_kin):
-        axs[i].hist(sg_kin[:, i], **sg_hist_kwargs)
-        axs[i].hist(bg_kin[:, i], **bg_hist_kwargs)
+    for i, kin_idx in enumerate(kin_indices):
+        axs[i].hist(sg_kin[:, kin_idx], **sg_hist_kwargs)
+        axs[i].hist(bg_kin[:, kin_idx], **bg_hist_kwargs)
         axs[i].set_xlabel(kin_xlabels[i],usetex=True)
         axs[i].legend()
+
+    return fig, axs
 
 #----------------------------------------------------------------------------------------------------#
 # UI
@@ -1175,9 +1244,514 @@ from torch_geometric.loader import DataLoader
 from torch.optim.lr_scheduler import StepLR, LambdaLR
 from torch.utils.data import random_split, WeightedRandomSampler
 import os.path as osp
+from os import makedirs
+import json
+
+def pipeline_titok(
+    is_tudataset = False,
+    out_dir = '',
+    dataset_name = None, #Note attempt to load TUDataset if given
+    transform = None, #T.Compose([T.ToUndirected(),T.KNNGraph(k=6),T.NormalizeFeatures()]),
+    max_idx = 1000,
+    src_root='src_dataset/',
+    tgt_root='tgt_dataset/',
+
+    # loader arguments
+    batch_size = 32,
+    drop_last = True,
+
+    # Model
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
+    nepochs = 200,
+    num_classes = 2,
+    gnn_type = "gin",
+    hdim_gnn = 64,
+    num_layers_gnn = 3,
+    dropout_gnn = 0.4,
+    heads = 4,
+    num_layers_clf = 3,
+    hdim_clf = 128,
+    dropout_clf = 0.4,
+
+    # Learning rate arguments
+    lr=0.001,
+    lr_scheduler = 'linear', # None/'', step, and linear
+    lr_kwargs = {'step_size':10, 'gamma':0.5}, #NOTE: default for step
+
+    soft_labels_temp=2,
+    confidence_threshold=0.8,
+    temp_fn=1.0,
+    alpha_fn=1.0,
+    lambda_fn=lambda_fn,
+    coeff_mmd=0.3,
+    coeff_auc=0.01,
+    coeff_soft=0.25,
+    pretrain_frac=0.2,
+    verbose=False,
+
+    return_labels=True,
+    pretraining=False,
+    metrics_plot_path = 'metrics_plot.pdf',
+    metrics_plot_figsize=(24,12),
+    logs_path = 'logs.json',
+    tsne_plot_path = 'tsne_plot.pdf',
+    tsne_plot_figsize=(20,8),
+
+    # Plot kinematics arguments
+    kin_indices = [i for i in range(3,11)],
+    kin_xlabels = ['$Q^2$ (GeV$^2$)', '$\\nu$', '$W$ (GeV)', '$x$', '$y$', '$z_{p\\pi^{-}}$', '$x_{F p\\pi^{-}}$', '$M_{p\\pi^{-}}$ (GeV)'], # 'idxe', 'idxp', 'idxpi', 
+    best_thr = roc_info['best_thr'],
+    src_kinematics_plot_path = 'src_kinematics_plot.pdf',
+    tgt_kinematics_plot_path = 'tgt_kinematics_plot.pdf',
+    kinematics_axs = None
+    ):
+
+    # Create output directory
+    if out_dir is not None and len(out_dir)>0:
+        makedirs(out_dir, exist_ok=True)
+
+    # Load TUDataset or custom dataset
+    src_ds, tgt_ds = None, None
+    if is_tudataset:
+        
+        # Shuffle and split into two subsets
+        if src_root==tgt_root or tgt_root is None or len(tgt_root)==0:
+            src_root_exp = osp.expanduser(src_root)
+            full_ds = TUDataset(root=osp.dirname(src_root_exp), name=osp.basename(src_root_exp))
+            total_len = len(full_ds)
+            split_len = total_len // 2
+            src_ds, tgt_ds = random_split(full_ds, [split_len, total_len - split_len])
+
+        # Or load two datasets
+        else:
+            src_root_exp = osp.expanduser(src_root)
+            tgt_root_exp = osp.expanduser(tgt_root)
+            src_ds = TUDataset(root=osp.dirname(src_root_exp), name=osp.basename(src_root_exp))
+            tgt_ds = TUDataset(root=osp.dirname(tgt_root_exp), name=osp.basename(tgt_root_exp))
+
+    # Load a custom pyg dataset
+    else:
+
+        #----- Load datasets -----#
+        src_ds = SmallDataset(
+                src_root,
+                transform=transform, 
+                pre_transform=None,
+                pre_filter=None
+            )[0:max_idx]
+        
+        tgt_ds = SmallDataset(
+                tgt_root,
+                transform=transform,
+                pre_transform=None,
+                pre_filter=None
+            )[0:max_idx]
+
+    #----- Create weighted data loader for source and target data -----#
+
+    sampler_train_weights = get_sampler_weights(src_train_ds)
+
+    sampler_train = WeightedRandomSampler(weights=sampler_train_weights,
+                                    num_samples=len(src_train_ds),
+                                    replacement=True)
+
+    # Create DataLoaders
+    src_train_loader = DataLoader(src_train_ds, batch_size=batch_size, sampler=sampler_train, drop_last=drop_last)
+    src_train_loader_unweighted = DataLoader(src_train_ds, batch_size=batch_size, shuffle=True, drop_last=drop_last)
+    tgt_train_loader = DataLoader(tgt_train_ds, batch_size=batch_size, shuffle=True, drop_last=drop_last)
+
+    #----- Create weighted data loader for source and target data -----#
+
+    sampler_val_weights = get_sampler_weights(src_val_ds)
+
+    sampler_val = WeightedRandomSampler(weights=sampler_val_weights,
+                                    num_samples=len(src_val_ds),
+                                    replacement=True)
+
+    # Create DataLoaders
+    src_val_loader = DataLoader(src_val_ds, batch_size=batch_size, sampler=sampler_val, drop_last=drop_last)
+    src_val_loader_unweighted = DataLoader(src_val_ds, batch_size=batch_size, shuffle=True, drop_last=drop_last)
+    tgt_val_loader = DataLoader(tgt_val_ds, batch_size=batch_size, shuffle=True, drop_last=drop_last)
+
+    #--------------------------------------------------------#
+    # Create model
+
+    num_node_features = src_ds[0].num_node_features
+
+    encoder = FlexibleGNNEncoder(
+        in_dim=num_node_features,
+        hidden_dim=hdim_gnn,
+        num_layers=num_layers_gnn,
+        gnn_type=gnn_type,      # Try 'gcn', 'sage', 'gat', 'gin'
+        dropout=dropout_gnn,
+        heads=heads              # Only relevant for GAT
+    ).to(device)
+
+    clf = GraphClassifier(
+        in_dim=hdim_gnn * (heads if gnn_type=="gat" else 1),
+        out_dim=num_classes,
+        num_layers=num_layers_clf,
+        hidden_dim=hdim_clf,
+        dropout=dropout_clf
+    ).to(device)
+
+    #---------- Set optimizer and learning rate scheduler ----------#
+    optimizer = torch.optim.Adam(
+        list(encoder.parameters()) + list(clf.parameters()),
+        lr=lr
+    )
+    scheduler = None
+    if lr_scheduler=='step':
+        scheduler = StepLR(optimizer, **lr_args)
+    if lr_scheduler=='linear':
+        lr_lambda = lambda epoch: (1 - (epoch / nepochs))
+        scheduler = LambdaLR(optimizer, lr_lambda)
+
+    #----- Train model
+    train_logs, soft_labels = train_titok(
+        encoder,
+        clf,
+        src_train_loader,
+        tgt_train_loader,
+        src_val_loader,
+        tgt_val_loader,
+        num_classes=num_classes,
+        soft_labels_temp=soft_labels_temp,
+        nepochs=nepochs,
+        confidence_threshold=confidence_threshold,
+        temp_fn=temp_fn,
+        alpha_fn=alpha_fn,
+        lambda_fn=lambda_fn,
+        coeff_mmd=coeff_mmd,
+        coeff_auc=coeff_auc,
+        coeff_soft=coeff_soft,
+        pretrain_frac=pretrain_frac,
+        device=device,
+        verbose=verbose
+    )
+
+    #----- Test model
+    temp = temp_fn if not callable(temp_fn) else temp_fn(nepochs,nepochs)
+    alpha = alpha_fn if not callable(alpha_fn) else alpha_fn(nepochs,nepochs)
+    lambd = lambda_fn if not callable(lambda_fn) else lambda_fn(nepochs,nepochs)
+    src_val_logs = val_titok(
+        encoder,
+        clf,
+        src_val_loader,
+        tgt_val_loader,
+        soft_labels,
+        return_labels=return_labels,
+        pretraining=pretraining,
+        num_classes=num_classes,
+        confidence_threshold=confidence_threshold,
+        temp=temp,
+        alpha=alpha,
+        lambd=lambd,
+        coeff_mmd=coeff_mmd,
+        coeff_auc=coeff_auc,
+        coeff_soft=coeff_soft,
+        device=device,
+        verbose=verbose
+    )
+
+    tgt_val_logs = val_titok(
+        encoder,
+        clf,
+        tgt_val_loader,
+        tgt_val_loader,
+        soft_labels,
+        return_labels=return_labels,
+        pretraining=pretraining,
+        num_classes=num_classes,
+        confidence_threshold=confidence_threshold,
+        temp=temp,
+        alpha=alpha,
+        lambd=lambd,
+        coeff_mmd=coeff_mmd,
+        coeff_auc=coeff_auc,
+        coeff_soft=coeff_soft,
+        device=device,
+        verbose=verbose
+    )
+
+    # Pop src validation log values
+    src_val_loss = src_val_logs["loss"]
+    src_val_loss_cls = src_val_logs["loss_cls"]
+    src_val_loss_mmd = src_val_logs["loss_mmd"]
+    src_val_loss_auc = src_val_logs["loss_auc"]
+    src_val_loss_soft = src_val_logs["loss_soft"]
+    src_val_acc_raw = src_val_logs["acc_raw"]
+    src_val_acc_per_class = src_val_logs["acc_per_class"]
+    src_acc_balanced = src_val_logs["acc_balanced"]
+    src_probs = src_val_logs["probs"]
+    src_preds = src_val_logs["preds"]
+    src_labels = src_val_logs["labels"]
+
+    # Pop tgt validation log values
+    tgt_val_loss = tgt_val_logs["loss"]
+    tgt_val_loss_cls = tgt_val_logs["loss_cls"]
+    tgt_val_loss_mmd = tgt_val_logs["loss_mmd"]
+    tgt_val_loss_auc = tgt_val_logs["loss_auc"]
+    tgt_val_loss_soft = tgt_val_logs["loss_soft"]
+    tgt_val_acc_raw = tgt_val_logs["acc_raw"]
+    tgt_val_acc_per_class = tgt_val_logs["acc_per_class"]
+    tgt_acc_balanced = tgt_val_logs["acc_balanced"]
+    tgt_probs = tgt_val_logs["probs"]
+    tgt_preds = tgt_val_logs["preds"]
+    tgt_labels = tgt_val_logs["labels"]
+
+    # Create figure
+    fig, axs = plt.subplots(2, 3, figsize=metrics_plot_figsize)
+
+    # Plot loss coefficients
+    alpha_values       = [alpha_fn(e, nepochs) if callable(alpha_fn) else alpha_fn for e in range(nepochs)]
+    lambda_values      = [lambda_fn(e, nepochs) if callable(lambda_fn) else lambda_fn for e in range(nepochs)]
+    loss_coeffs        = [alpha_values, lambda_values]
+    loss_coeffs_kwargs = [{'label':'alpha'},{'label':'lambda'}]
+    plot_epoch_metrics(
+        axs[0,1],
+        nepochs,
+        title='Loss Coefficients',
+        xlabel='Epoch',
+        ylabel='Loss Coefficient',
+        yscale=None,
+        xscale=None,
+        legend_bbox_to_anchor=None,
+        legend_loc='best',
+        epoch_metrics=loss_coeffs,
+        plot_kwargs=loss_coeffs_kwargs,
+        normalize_to_max=False
+    )
+
+    # Plot learning rate
+    lrs        = [train_logs['lrs']]
+    lrs_kwargs = [{'label':'lr'}]
+    plot_epoch_metrics(
+        axs[1,1],
+        nepochs,
+        title='Learning Rate',
+        xlabel='Epoch',
+        ylabel='Learning Rate',
+        yscale='log',
+        xscale=None,
+        legend_bbox_to_anchor=None,
+        legend_loc='best',
+        epoch_metrics=lrs,
+        plot_kwargs=lrs_kwargs,
+        normalize_to_max=False
+    )
+
+    # Plot training and validation losses
+    train_losses  = [train_logs[key] for key in train_logs if 'train_loss' in key]
+    val_losses    = [train_logs[key] for key in train_logs if 'val_loss' in key]
+    losses = [*train_losses, *val_losses]
+    train_losses_kwargs  = [{'label':key} for key in train_logs if 'train_loss' in key]
+    val_losses_kwargs    = [{'label':key, 'linestyle':':'} for key in train_logs if 'val_loss' in key]
+    losses_kwargs = [*train_losses_kwargs, *val_losses_kwargs]
+    plot_epoch_metrics(
+        axs[0,2],
+        nepochs,
+        title='Losses',
+        xlabel='Epoch',
+        ylabel='Loss',
+        yscale='log',
+        xscale=None,
+        legend_bbox_to_anchor=(1.05, 1),
+        legend_loc='upper left',
+        epoch_metrics=losses,
+        plot_kwargs=losses_kwargs,
+        normalize_to_max=True
+    )
+
+    # Plot training and validation accuracies
+    train_accs  = [train_logs[key] for key in train_logs if 'train_acc' in key]
+    val_accs    = [train_logs[key] for key in train_logs if 'val_acc' in key]
+    print(train_logs.keys())
+    print([key for key in train_logs if 'train_acc' in key])
+    print([key for key in train_logs if 'val_acc' in key])
+    accs = [*train_accs, *val_accs]
+    train_accs_kwargs  = [{'label':key} for key in train_logs if 'train_acc' in key]
+    val_accs_kwargs    = [{'label':key, 'linestyle':':'} for key in train_logs if 'val_acc' in key]
+    accs_kwargs = [*train_accs_kwargs, *val_accs_kwargs]
+    plot_epoch_metrics(
+        axs[1,2],
+        nepochs,
+        title='Accuracies',
+        xlabel='Epoch',
+        ylabel='Accuracy',
+        yscale=None,
+        xscale=None,
+        legend_bbox_to_anchor=(1.05, 1),
+        legend_loc='upper left',
+        epoch_metrics=accs,
+        plot_kwargs=accs_kwargs,
+        normalize_to_max=True
+    )
+
+    # Plot domain predictions
+    plot_domain_preds(axs[0,0], src_probs[:,1], tgt_probs[:,1])
+
+    # Plot ROC AUC curve
+    roc_info, thresholds = get_best_threshold(src_labels, src_probs[:,1])
+    plot_roc(
+        axs[1,0],
+        **roc_info
+    )
+
+    # Save and show plot
+    plt.tight_layout()
+    fig.savefig(osp.join(out_dir,metrics_plot_path))
+
+    # Save training logs
+    with open(osp.join(out_dir,logs_path), "w") as f:
+        json.dump({
+            'train':train_logs,
+            'src_val':[el if type(el)!=torch.Tensor else el.tolist() for el in src_val_logs],
+            'tgt_val_logs':[el if type(el)!=torch.Tensor else el.tolist() for el in src_val_logs]
+        }, f, indent=2)
+
+    #----- t-SNE model representation
+    src_embeds, src_labels, src_domains, src_preds = collect_embeddings(encoder, clf, src_val_loader_unweighted, device, domain_label=0)
+    tgt_embeds, tgt_labels, tgt_domains, tgt_preds = collect_embeddings(encoder, clf, tgt_val_loader, device, domain_label=1)
+
+    # Combine
+    all_embeds = torch.cat([src_embeds, tgt_embeds], dim=0)
+    all_labels = torch.cat([src_labels, tgt_labels], dim=0)
+    all_domains = torch.cat([src_domains, tgt_domains], dim=0)
+    all_preds = torch.cat([src_preds, tgt_preds], dim=0)
+    labels_and_preds = torch.cat([src_labels, tgt_preds], dim=0)
+
+    # Create figure
+    fig, axs = plt.subplots(1, 2, figsize=tsne_plot_figsize)
+
+    # Plot
+    plot_tsne(axs[0], all_embeds.numpy(), labels_and_preds, all_domains, title='t-SNE representation : true source labels')
+    plot_tsne(axs[1], all_embeds.numpy(), all_preds, all_domains, title='t-SNE representation : model predicted labels')
+
+    # Save and show t-SNE fig
+    plt.tight_layout()
+    fig.savefig(osp.join(out_dir,tsne_plot_path))
+
+    #-----
+
+    # Get kinematics for source and target domains
+    src_sg_kin, src_bg_kin = get_kinematics(encoder, clf, src_val_loader_unweighted, threshold=best_thr, device=device,
+                                    class_idx_signal=1, class_idx_background=0)
+    tgt_sg_kin, tgt_bg_kin = get_kinematics(encoder, clf, tgt_val_loader, threshold=best_thr, device=device,
+                                    class_idx_signal=1, class_idx_background=0)
+
+    try:
+
+        # Plot kinematics for source and target domains
+        src_fig, src_axs = plot_kinematics(kinematics_axs, src_sg_kin, src_bg_kin, kin_indices=kin_indices, kin_xlabels=kin_xlabels,
+                            sg_hist_kwargs={'bins':50, 'alpha':0.6, 'label':'Signal', 'color':'C0', 'density':True},
+                            bg_hist_kwargs={'bins':50, 'alpha':0.6, 'label':'Background', 'color':'C1', 'density':True}
+        )
+        tgt_fig, tgt_axs = plot_kinematics(kinematics_axs, tgt_sg_kin, tgt_bg_kin, kin_indices=kin_indices, kin_xlabels=kin_xlabels,
+                            sg_hist_kwargs={'bins':50, 'alpha':0.6, 'label':'Signal', 'color':'C0', 'density':True},
+                            bg_hist_kwargs={'bins':50, 'alpha':0.6, 'label':'Background', 'color':'C1', 'density':True}
+        )
+    
+        # Save and plot kinematics figures
+        plt.tight_layout()
+        src_fig.savefig(osp.join(out_dir,src_kinematics_plot_path))
+        tgt_fig.savefig(osp.join(out_dir,tgt_kinematics_plot_path))
+
+    except ValueError:
+        pass
+
+    # Set output paths
+    paths = [metrics_plot_path, tsne_plot_path, src_kinematics_plot_path, tgt_kinematics_plot_path]
+    paths = [osp.join(out_dir,path) for path in paths]
+
+    return roc_info, src_val_logs, tgt_val_logs, paths
+
+#----------------------------------------------------------------------------------------------------#
+# OPTIMIZATION
+
+import optuna
+from optuna.integration.wandb import WeightsAndBiasesCallback
+import wandb
+import os
+from uuid import uuid4
+from pathlib import Path
+import sqlite3
+
+# Define the objective function
+def objective(trial):
+    # Sample hyperparameters
+    lr = trial.suggest_loguniform("lr", 1e-5, 1e-2)
+    dropout = trial.suggest_uniform("dropout", 0.1, 0.5)
+    weight_decay = trial.suggest_loguniform("weight_decay", 1e-6, 1e-2)
+
+    # Create a unique output directory for this trial
+    trial_id = str(uuid4())
+    output_dir = Path("experiments") / trial_id
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Log to wandb
+    wandb_run = wandb.init(
+        project="hyperparam-optimization",
+        name=f"trial-{trial.number}",
+        config={"lr": lr, "dropout": dropout, "weight_decay": weight_decay},
+        dir=str(output_dir),
+        reinit=True,
+    )
+
+    try:
+        logs = pipeline(
+            config_dir=output_dir,
+            lr=lr,
+            dropout=dropout,
+            weight_decay=weight_decay
+        )
+    except Exception as e:
+        wandb_run.finish(exit_code=1)
+        raise optuna.exceptions.TrialPruned()  # or fail silently
+
+    # Get the AUC from first log dictionary
+    auc = logs[0].get("auc", 0.0)
+
+    # Log metrics to wandb
+    wandb_run.log({"auc": auc})
+    wandb_run.finish()
+
+    return auc  # Higher is better (maximize)
+
+# SQL-backed Optuna study
+storage = optuna.storages.RDBStorage(
+    url="sqlite:///optuna_study.db"  # or your PostgreSQL/MySQL URL
+)
+
+study = optuna.create_study(
+    direction="maximize",
+    study_name="model_hpo",
+    storage=storage,
+    load_if_exists=True,
+)
+
+# Optional: use a callback to also log params and scores to WANDB dashboard
+wandb_callback = WeightsAndBiasesCallback(metric_name="auc", as_multirun=True)
+
+# Optimize
+study.optimize(objective, n_trials=100, callbacks=[wandb_callback])
+
+
+#----------------------------------------------------------------------------------------------------#
+# Script
+from torch_geometric.datasets import TUDataset
+from torch_geometric.loader import DataLoader
+from torch.optim.lr_scheduler import StepLR, LambdaLR
+from torch.utils.data import random_split, WeightedRandomSampler
+import os.path as osp
+
+DATASET_NAME = 'LAMBDAS'
+transform = None #T.Compose([T.ToUndirected(),T.KNNGraph(k=6),T.NormalizeFeatures()]),
+max_idx = 1000
+src_root='/work/clas12/users/mfmce/pyg_test_rec_particle_dataset_3_7_25/'
+tgt_root='/work/clas12/users/mfmce/pyg_DATA_rec_particle_dataset_3_5_24/'
 
 # Load full PROTEINS dataset
-DATASET_NAME = 'PROTEINS'
 full_ds, src_ds, tgt_ds = None, None, None
 if DATASET_NAME == 'PROTEINS':
     full_ds = TUDataset(root=osp.expanduser('~/drop/data/'+DATASET_NAME), name=DATASET_NAME)
@@ -1188,30 +1762,24 @@ if DATASET_NAME == 'PROTEINS':
     src_ds, tgt_ds = random_split(full_ds, [split_len, total_len - split_len])
 
 if DATASET_NAME == 'LAMBDAS':
-    src_root='/work/clas12/users/mfmce/pyg_test_rec_particle_dataset_3_7_25/'
-    tgt_root='/work/clas12/users/mfmce/pyg_DATA_rec_particle_dataset_3_5_24/'
-
-    max_idx = 1000
     
     #----- Load datasets -----#
     src_ds = SmallDataset(
             src_root,
-            transform=None, #T.Compose([T.ToUndirected(),T.KNNGraph(k=6),T.NormalizeFeatures()]),
+            transform=transform, 
             pre_transform=None,
             pre_filter=None
         )[0:max_idx]
     
     tgt_ds = SmallDataset(
             tgt_root,
-            transform=None, #T.Compose([T.ToUndirected(),T.KNNGraph(k=6),T.NormalizeFeatures()]),
+            transform=transform,
             pre_transform=None,
             pre_filter=None
         )[0:max_idx]
 
-#---------- Split datasets ----------#
-src_train_ds, src_val_ds = random_split(src_ds, [0.8, 0.2])
-tgt_train_ds, tgt_val_ds = random_split(tgt_ds, [0.8, 0.2])
-
+batch_size = 32
+drop_last = True
 #----- Create weighted data loader for source and target data -----#
 
 sampler_train_weights = get_sampler_weights(src_train_ds)
@@ -1221,9 +1789,9 @@ sampler_train = WeightedRandomSampler(weights=sampler_train_weights,
                                  replacement=True)
 
 # Create DataLoaders
-src_train_loader = DataLoader(src_train_ds, batch_size=32, sampler=sampler_train, drop_last=True)
-src_train_loader_unweighted = DataLoader(src_train_ds, batch_size=32, shuffle=True, drop_last=True)
-tgt_train_loader = DataLoader(tgt_train_ds, batch_size=32, shuffle=True, drop_last=True)
+src_train_loader = DataLoader(src_train_ds, batch_size=batch_size, sampler=sampler_train, drop_last=drop_last)
+src_train_loader_unweighted = DataLoader(src_train_ds, batch_size=batch_size, shuffle=True, drop_last=drop_last)
+tgt_train_loader = DataLoader(tgt_train_ds, batch_size=batch_size, shuffle=True, drop_last=drop_last)
 
 #----- Create weighted data loader for source and target data -----#
 
@@ -1234,15 +1802,15 @@ sampler_val = WeightedRandomSampler(weights=sampler_val_weights,
                                  replacement=True)
 
 # Create DataLoaders
-src_val_loader = DataLoader(src_val_ds, batch_size=32, sampler=sampler_val, drop_last=True)
-src_val_loader_unweighted = DataLoader(src_val_ds, batch_size=32, shuffle=True, drop_last=True)
-tgt_val_loader = DataLoader(tgt_val_ds, batch_size=32, shuffle=True, drop_last=True)
+src_val_loader = DataLoader(src_val_ds, batch_size=batch_size, sampler=sampler_val, drop_last=drop_last)
+src_val_loader_unweighted = DataLoader(src_val_ds, batch_size=batch_size, shuffle=True, drop_last=drop_last)
+tgt_val_loader = DataLoader(tgt_val_ds, batch_size=batch_size, shuffle=True, drop_last=drop_last)
 
 #--------------------------------------------------------#
 # Create model
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-epochs = 200
+nepochs = 200
 num_classes = 2
 gnn_type = "gin"
 hdim_gnn = 64
@@ -1294,8 +1862,21 @@ optimizer = torch.optim.Adam(
 )
 # scheduler = StepLR(optimizer, step_size=10, gamma=0.5)
 # Linear decay from 1.0 to 0.0 over epochs
-lr_lambda = lambda epoch: (1 - (epoch / epochs))
+lr_lambda = lambda epoch: (1 - (epoch / nepochs))
 scheduler = LambdaLR(optimizer, lr_lambda)
+
+num_classes=2
+soft_labels_temp=2
+nepochs=100
+confidence_threshold=0.8
+temp_fn=1.0
+alpha_fn=1.0
+lambda_fn=lambda_fn
+coeff_mmd=0.3
+coeff_auc=0.01
+coeff_soft=0.25
+pretrain_frac=0.2
+verbose=False
 
 train_logs, soft_labels = train_titok(
     encoder,
@@ -1304,39 +1885,44 @@ train_logs, soft_labels = train_titok(
     tgt_train_loader,
     src_val_loader,
     tgt_val_loader,
-    num_classes=2,
-    soft_labels_temp=2,
-    epochs=100,
-    confidence_threshold=0.8,
-    temp_fn=1.0,
-    alpha_fn=1.0,
+    num_classes=num_classes,
+    soft_labels_temp=soft_labels_temp,
+    nepochs=nepochs,
+    confidence_threshold=confidence_threshold,
+    temp_fn=temp_fn,
+    alpha_fn=alpha_fn,
     lambda_fn=lambda_fn,
-    coeff_mmd=0.3,
-    coeff_auc=0.01,
-    coeff_soft=0.25,
-    pretrain_frac=0.2,
+    coeff_mmd=coeff_mmd,
+    coeff_auc=coeff_auc,
+    coeff_soft=coeff_soft,
+    pretrain_frac=pretrain_frac,
     device=device,
-    verbose=False
+    verbose=verbose
 )
 
+return_labels=True,
+pretraining=False,
+temp = temp_fn if not callable(temp_fn) else temp_fn(nepochs,nepochs)
+alpha = alpha_fn if not callable(alpha_fn) else alpha_fn(nepochs,nepochs)
+lambd = lambda_fn if not callable(lambda_fn) else lambda_fn(nepochs,nepochs)
 src_val_logs = val_titok(
     encoder,
     clf,
     src_val_loader,
     tgt_val_loader,
     soft_labels,
-    return_labels=True,
-    pretraining=False,
-    num_classes=2,
-    confidence_threshold=0.8,
-    temp=1.0,
-    alpha=1.0,
-    lambd=lambda_fn,
-    coeff_mmd=0.3,
-    coeff_auc=0.01,
-    coeff_soft=0.25,
+    return_labels=return_labels,
+    pretraining=pretraining,
+    num_classes=num_classes,
+    confidence_threshold=confidence_threshold,
+    temp=temp,
+    alpha=alpha,
+    lambd=lambd,
+    coeff_mmd=coeff_mmd,
+    coeff_auc=coeff_auc,
+    coeff_soft=coeff_soft,
     device=device,
-    verbose=False
+    verbose=verbose
 )
 
 tgt_val_logs = val_titok(
@@ -1345,51 +1931,165 @@ tgt_val_logs = val_titok(
     tgt_val_loader,
     tgt_val_loader,
     soft_labels,
-    return_labels=True,
-    pretraining=False,
-    num_classes=2,
-    confidence_threshold=0.8,
-    temp=1.0,
-    alpha=1.0,
-    lambd=lambda_fn,
-    coeff_mmd=0.3,
-    coeff_auc=0.01,
-    coeff_soft=0.25,
+    return_labels=return_labels,
+    pretraining=pretraining,
+    num_classes=num_classes,
+    confidence_threshold=confidence_threshold,
+    temp=temp,
+    alpha=alpha,
+    lambd=lambd,
+    coeff_mmd=coeff_mmd,
+    coeff_auc=coeff_auc,
+    coeff_soft=coeff_soft,
     device=device,
-    verbose=False
+    verbose=verbose
 )
 
-#TODO: NEED TO SELELCTO FROM src_preds and tgt_preds [nbatches, batch_size, num_classes] the classes you actually want
+# Pop src validation log values
+src_val_loss = src_val_logs["loss"]
+src_val_loss_cls = src_val_logs["loss_cls"]
+src_val_loss_mmd = src_val_logs["loss_mmd"]
+src_val_loss_auc = src_val_logs["loss_auc"]
+src_val_loss_soft = src_val_logs["loss_soft"]
+src_val_acc_raw = src_val_logs["acc_raw"]
+src_val_acc_per_class = src_val_logs["acc_per_class"]
+src_acc_balanced = src_val_logs["acc_balanced"]
+src_probs = src_val_logs["probs"]
+src_preds = src_val_logs["preds"]
+src_labels = src_val_logs["labels"]
 
-# dis_acc, dis_outs, _ = eval_disc(src_loader,tgt_loader,return_labels=True,alpha=1.0)
-print(f'Source Accuracy: {src_acc:.4f}')
-print(f'Source Per Class Accuracy: {src_per_class_acc}')
-print(f'Source Balanced Accuracy: {src_balanced_acc:.4f}')
-if DATASET_NAME!='LAMBDAS': print(f'Target Accuracy: {tgt_acc:.4f}')
-# print(f'Discri Accuracy: {dis_acc:.4f}')
+# Pop tgt validation log values
+tgt_val_loss = tgt_val_logs["loss"]
+tgt_val_loss_cls = tgt_val_logs["loss_cls"]
+tgt_val_loss_mmd = tgt_val_logs["loss_mmd"]
+tgt_val_loss_auc = tgt_val_logs["loss_auc"]
+tgt_val_loss_soft = tgt_val_logs["loss_soft"]
+tgt_val_acc_raw = tgt_val_logs["acc_raw"]
+tgt_val_acc_per_class = tgt_val_logs["acc_per_class"]
+tgt_acc_balanced = tgt_val_logs["acc_balanced"]
+tgt_probs = tgt_val_logs["probs"]
+tgt_preds = tgt_val_logs["preds"]
+tgt_labels = tgt_val_logs["labels"]
 
-# Temperature values
-epoch_range   = np.arange(1, epochs + 1)
-alpha_values  = [alpha_fn(e, epochs) if callable(alpha_fn) else alpha_fn for e in epoch_range]
-lambda_values = [lambda_fn(e, epochs) if callable(lambda_fn) else lambda_fn for e in epoch_range]
+import json
 
-# Plot
-fig, axs = plt.subplots(2, 3, figsize=(20, 12))
-#TODO: CALL PLOT METHODS
-# # Hide unused subplot
-# axs[0,2].axis('off')
-# axs[1,2].axis('off')
+metrics_plot_path = 'metrics_plot.pdf'
+logs_path = 'logs.json'
+figsize=(24,12)
 
+# Create figure
+fig, axs = plt.subplots(2, 3, figsize=figsize)
+
+# Plot loss coefficients
+alpha_values       = [alpha_fn(e, nepochs) if callable(alpha_fn) else alpha_fn for e in range(nepochs)]
+lambda_values      = [lambda_fn(e, nepochs) if callable(lambda_fn) else lambda_fn for e in range(nepochs)]
+loss_coeffs        = [alpha_values, lambda_values]
+loss_coeffs_kwargs = [{'label':'alpha'},{'label':'lambda'}]
+plot_epoch_metrics(
+    axs[0,1],
+    nepochs,
+    title='Loss Coefficients',
+    xlabel='Epoch',
+    ylabel='Loss Coefficient',
+    yscale=None,
+    xscale=None,
+    legend_bbox_to_anchor=None,
+    legend_loc='best',
+    epoch_metrics=loss_coeffs,
+    plot_kwargs=loss_coeffs_kwargs,
+    normalize_to_max=False
+)
+
+# Plot learning rate
+lrs        = [train_logs['lrs']]
+lrs_kwargs = [{'label':'lr'}]
+plot_epoch_metrics(
+    axs[1,1],
+    nepochs,
+    title='Learning Rate',
+    xlabel='Epoch',
+    ylabel='Learning Rate',
+    yscale='log',
+    xscale=None,
+    legend_bbox_to_anchor=None,
+    legend_loc='best',
+    epoch_metrics=lrs,
+    plot_kwargs=lrs_kwargs,
+    normalize_to_max=False
+)
+
+# Plot training and validation losses
+train_losses  = [train_logs[key] for key in train_logs if 'train_loss' in key]
+val_losses    = [train_logs[key] for key in train_logs if 'val_loss' in key]
+losses = [*train_losses, *val_losses]
+train_losses_kwargs  = [{'label':key} for key in train_logs if 'train_loss' in key]
+val_losses_kwargs    = [{'label':key, 'linestyle':':'} for key in train_logs if 'val_loss' in key]
+losses_kwargs = [*train_losses_kwargs, *val_losses_kwargs]
+plot_epoch_metrics(
+    axs[0,2],
+    nepochs,
+    title='Losses',
+    xlabel='Epoch',
+    ylabel='Loss',
+    yscale='log',
+    xscale=None,
+    legend_bbox_to_anchor=(1.05, 1),
+    legend_loc='upper left',
+    epoch_metrics=losses,
+    plot_kwargs=losses_kwargs,
+    normalize_to_max=True
+)
+
+# Plot training and validation accuracies
+train_accs  = [train_logs[key] for key in train_logs if 'train_acc' in key]
+val_accs    = [train_logs[key] for key in train_logs if 'val_acc' in key]
+print(train_logs.keys())
+print([key for key in train_logs if 'train_acc' in key])
+print([key for key in train_logs if 'val_acc' in key])
+accs = [*train_accs, *val_accs]
+train_accs_kwargs  = [{'label':key} for key in train_logs if 'train_acc' in key]
+val_accs_kwargs    = [{'label':key, 'linestyle':':'} for key in train_logs if 'val_acc' in key]
+accs_kwargs = [*train_accs_kwargs, *val_accs_kwargs]
+plot_epoch_metrics(
+    axs[1,2],
+    nepochs,
+    title='Accuracies',
+    xlabel='Epoch',
+    ylabel='Accuracy',
+    yscale=None,
+    xscale=None,
+    legend_bbox_to_anchor=(1.05, 1),
+    legend_loc='upper left',
+    epoch_metrics=accs,
+    plot_kwargs=accs_kwargs,
+    normalize_to_max=True
+)
+
+# Plot domain predictions
+plot_domain_preds(axs[0,0], src_probs[:,1], tgt_probs[:,1])
+
+# Plot ROC AUC curve
+roc_info, thresholds = get_best_threshold(src_labels, src_probs[:,1])
+plot_roc(
+    axs[1,0],
+    **roc_info
+)
+
+# Save and show plot
 plt.tight_layout()
+fig.savefig(metrics_plot_path)
 plt.show()
 
-# Assuming you have:
-# - encoder (trained)
-# - source_loader and target_loader
-# - device (cuda or cpu)
+# Save training logs
+with open(logs_path, "w") as f:
+    json.dump({
+        'train':train_logs,
+        'src_val':[el if type(el)!=torch.Tensor else el.tolist() for el in src_val_logs],
+        'tgt_val_logs':[el if type(el)!=torch.Tensor else el.tolist() for el in src_val_logs]
+    }, f, indent=2)
 
-src_embeds, src_labels, src_domains, src_preds = collect_embeddings(encoder, clf, src_loader_unweighted, device, domain_label=0)
-tgt_embeds, tgt_labels, tgt_domains, tgt_preds = collect_embeddings(encoder, clf, tgt_loader, device, domain_label=1)
+src_embeds, src_labels, src_domains, src_preds = collect_embeddings(encoder, clf, src_val_loader_unweighted, device, domain_label=0)
+tgt_embeds, tgt_labels, tgt_domains, tgt_preds = collect_embeddings(encoder, clf, tgt_val_loader, device, domain_label=1)
 
 # Combine
 all_embeds = torch.cat([src_embeds, tgt_embeds], dim=0)
@@ -1398,16 +2098,53 @@ all_domains = torch.cat([src_domains, tgt_domains], dim=0)
 all_preds = torch.cat([src_preds, tgt_preds], dim=0)
 labels_and_preds = torch.cat([src_labels, tgt_preds], dim=0)
 
+
+# Create plot
+tsne_plot_path = 'tsne_plot.pdf'
+figsize=(20,8)
+
+# Create figure
+fig, axs = plt.subplots(1, 2, figsize=figsize)
+
 # Plot
-plot_tsne(all_embeds.numpy(), all_labels, all_domains, title='t-SNE of Graph Embeddings with all target domain labels set to 0')
-plot_tsne(all_embeds.numpy(), labels_and_preds, all_domains, title='t-SNE of Graph Embeddings with all target domain labels set from model predictions')
-plot_tsne(all_embeds.numpy(), all_preds, all_domains, title='t-SNE of Graph Embeddings with all labels set from model predictions')
+plot_tsne(axs[0], all_embeds.numpy(), labels_and_preds, all_domains, title='t-SNE representation : true source labels')
+plot_tsne(axs[1], all_embeds.numpy(), all_preds, all_domains, title='t-SNE representation : model predicted labels')
 
-kinematic_labels = ['Q2', 'nu', 'W', 'x', 'y', 'z', 'xF', 'mass'] # 'idxe', 'idxp', 'idxpi', 
-plot_kinematic_distributions(encoder, clf, src_loader_unweighted, threshold=best_thr, device='cuda',
-                                  class_idx_signal=1, class_idx_background=0,
-                                  kinematic_labels=kinematic_labels)
+# Save and show fig
+plt.tight_layout()
+fig.savefig(tsne_plot_path)
+plt.show()
 
-plot_kinematic_distributions(encoder, clf, tgt_loader, threshold=best_thr, device='cuda',
-                                  class_idx_signal=1, class_idx_background=0,
-                                  kinematic_labels=kinematic_labels)
+# Plot kinematics arguments
+kin_indices = [i for i in range(3,11)]
+kin_xlabels = ['$Q^2$ (GeV$^2$)', '$\\nu$', '$W$ (GeV)', '$x$', '$y$', '$z_{p\\pi^{-}}$', '$x_{F p\\pi^{-}}$', '$M_{p\\pi^{-}}$ (GeV)'] # 'idxe', 'idxp', 'idxpi', 
+best_thr = roc_info['best_thr']
+src_kinematics_plot_path = 'src_kinematics_plot.pdf'
+tgt_kinematics_plot_path = 'tgt_kinematics_plot.pdf'
+
+axs = None
+
+# Get kinematics for source and target domains
+src_sg_kin, src_bg_kin = get_kinematics(encoder, clf, src_val_loader_unweighted, threshold=best_thr, device=device,
+                                  class_idx_signal=1, class_idx_background=0)
+tgt_sg_kin, tgt_bg_kin = get_kinematics(encoder, clf, tgt_val_loader, threshold=best_thr, device=device,
+                                  class_idx_signal=1, class_idx_background=0)
+
+print(len(kin_indices))
+print(len(kin_xlabels))
+
+# Plot kinematics for source and target domains
+src_fig, src_axs = plot_kinematics(axs, src_sg_kin, src_bg_kin, kin_indices=kin_indices, kin_xlabels=kin_xlabels,
+                    sg_hist_kwargs={'bins':50, 'alpha':0.6, 'label':'Signal', 'color':'C0', 'density':True},
+                    bg_hist_kwargs={'bins':50, 'alpha':0.6, 'label':'Background', 'color':'C1', 'density':True}
+)
+tgt_fig, tgt_axs = plot_kinematics(axs, tgt_sg_kin, tgt_bg_kin, kin_indices=kin_indices, kin_xlabels=kin_xlabels,
+                    sg_hist_kwargs={'bins':50, 'alpha':0.6, 'label':'Signal', 'color':'C0', 'density':True},
+                    bg_hist_kwargs={'bins':50, 'alpha':0.6, 'label':'Background', 'color':'C1', 'density':True}
+)
+
+# Save and plot figures
+plt.tight_layout()
+fig.savefig(src_kinematics_plot_path)
+fig.savefig(tgt_kinematics_plot_path)
+plt.show()
