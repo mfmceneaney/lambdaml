@@ -1285,6 +1285,7 @@ import json
 
 def pipeline_titok(
     is_tudataset = False,
+    use_lazy_dataset = False,
     out_dir = '',
     dataset_name = None, #Note attempt to load TUDataset if given
     transform = None, #T.Compose([T.ToUndirected(),T.KNNGraph(k=6),T.NormalizeFeatures()]),
@@ -1367,21 +1368,36 @@ def pipeline_titok(
 
     # Load a custom pyg dataset
     else:
+        if not use_lazy_dataset:
+            
+            src_ds = SmallDataset(
+                    src_root,
+                    transform=transform, 
+                    pre_transform=None,
+                    pre_filter=None
+                )[0:max_idx]
+            
+            tgt_ds = SmallDataset(
+                    tgt_root,
+                    transform=transform,
+                    pre_transform=None,
+                    pre_filter=None
+                )[0:max_idx]
 
-        #----- Load datasets -----#
-        src_ds = SmallDataset(
-                src_root,
-                transform=transform, 
-                pre_transform=None,
-                pre_filter=None
-            )[0:max_idx]
-        
-        tgt_ds = SmallDataset(
-                tgt_root,
-                transform=transform,
-                pre_transform=None,
-                pre_filter=None
-            )[0:max_idx]
+        else:
+            src_ds = LazyDataset(
+                    src_root,
+                    transform=transform, 
+                    pre_transform=None,
+                    pre_filter=None
+                )[0:max_idx]
+            
+            tgt_ds = LazyDataset(
+                    tgt_root,
+                    transform=transform,
+                    pre_transform=None,
+                    pre_filter=None
+                )[0:max_idx]
 
     #----- Create weighted data loader for source and target data -----#
 
