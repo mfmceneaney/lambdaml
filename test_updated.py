@@ -1820,8 +1820,9 @@ def objective(trial, metric_name="auc", metric_fn=lambda logs: return logs["auc"
     return metric  # Higher is better (maximize)
 
 # SQL-backed Optuna study
+storage_url = "sqlite:///optuna_study.db"
 storage = optuna.storages.RDBStorage(
-    url="sqlite:///optuna_study.db"  # or your PostgreSQL/MySQL URL
+    url=storage_url  # or your PostgreSQL/MySQL URL
 )
 
 optuna_study_direction="maximize",
