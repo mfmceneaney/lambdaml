@@ -1404,31 +1404,13 @@ def pipeline_titok(
                     pre_filter=None
                 )[0:max_idx]
 
-    #----- Create weighted data loader for source and target data -----#
-
-    sampler_train_weights = get_sampler_weights(src_train_ds)
-
-    sampler_train = WeightedRandomSampler(weights=sampler_train_weights,
-                                    num_samples=len(src_train_ds),
-                                    replacement=True)
-
     # Create DataLoaders
-    src_train_loader = DataLoader(src_train_ds, batch_size=batch_size, sampler=sampler_train, drop_last=drop_last)
-    src_train_loader_unweighted = DataLoader(src_train_ds, batch_size=batch_size, shuffle=True, drop_last=drop_last)
+    src_train_loader = DataLoader(src_train_ds, batch_size=batch_size, shuffle=True, drop_last=drop_last)
     tgt_train_loader = DataLoader(tgt_train_ds, batch_size=batch_size, shuffle=True, drop_last=drop_last)
 
-    #----- Create weighted data loader for source and target data -----#
-
-    sampler_val_weights = get_sampler_weights(src_val_ds)
-
-    sampler_val = WeightedRandomSampler(weights=sampler_val_weights,
-                                    num_samples=len(src_val_ds),
-                                    replacement=True)
-
     # Create DataLoaders
-    src_val_loader = DataLoader(src_val_ds, batch_size=batch_size, sampler=sampler_val, drop_last=drop_last)
-    src_val_loader_unweighted = DataLoader(src_val_ds, batch_size=batch_size, shuffle=True, drop_last=drop_last)
-    tgt_val_loader = DataLoader(tgt_val_ds, batch_size=batch_size, shuffle=True, drop_last=drop_last)
+    src_val_loader = DataLoader(src_val_ds, batch_size=batch_size, shuffle=False, drop_last=drop_last)
+    tgt_val_loader = DataLoader(tgt_val_ds, batch_size=batch_size, shuffle=False, drop_last=drop_last)
 
     #--------------------------------------------------------#
     # Create model
@@ -1668,7 +1650,7 @@ def pipeline_titok(
         }, f, indent=2)
 
     #----- t-SNE model representation
-    src_embeds, src_labels, src_domains, src_preds = collect_embeddings(encoder, clf, src_val_loader_unweighted, device, domain_label=0)
+    src_embeds, src_labels, src_domains, src_preds = collect_embeddings(encoder, clf, src_val_loader, device, domain_label=0)
     tgt_embeds, tgt_labels, tgt_domains, tgt_preds = collect_embeddings(encoder, clf, tgt_val_loader, device, domain_label=1)
 
     # Combine
@@ -1692,7 +1674,7 @@ def pipeline_titok(
     #-----
 
     # Get kinematics for source and target domains
-    src_sg_kin, src_bg_kin = get_kinematics(encoder, clf, src_val_loader_unweighted, threshold=best_thr, device=device,
+    src_sg_kin, src_bg_kin = get_kinematics(encoder, clf, src_val_loader, threshold=best_thr, device=device,
                                     class_idx_signal=1, class_idx_background=0)
     tgt_sg_kin, tgt_bg_kin = get_kinematics(encoder, clf, tgt_val_loader, threshold=best_thr, device=device,
                                     class_idx_signal=1, class_idx_background=0)
@@ -1819,33 +1801,45 @@ def objective(trial, metric_name="auc", metric_fn=lambda logs: return logs["auc"
 
     return metric  # Higher is better (maximize)
 
-# SQL-backed Optuna study
-storage_url = "sqlite:///optuna_study.db"
-storage = optuna.storages.RDBStorage(
-    url=storage_url  # or your PostgreSQL/MySQL URL
-)
+def optimize(
+        storage_url = "sqlite:///optuna_study.db",
+        optuna_study_direction="maximize",
+        optuna_study_name="model_hpo",
+        metric_name = "auc",
+        metric_fn = lambda logs: return logs[0]["auc"],
+        suggestion_rules = {},
+        pipeline_kwargs = {},
+        n_trials = 100
+    ):
 
-optuna_study_direction="maximize",
-optuna_study_name="model_hpo",
-study = optuna.create_study(
-    direction=optuna_study_direction,
-    study_name=optuna_study_name,
-    storage=storage,
-    load_if_exists=True,
-)
+    # Create database
+    storage = optuna.storages.RDBStorage(
+        url=storage_url  # or your PostgreSQL/MySQL URL
+    )
 
-# Optional: use a callback to also log params and scores to WANDB dashboard
-wandb_callback = WeightsAndBiasesCallback(metric_name="auc", as_multirun=True)
+    # Create study
+    study = optuna.create_study(
+        direction=optuna_study_direction,
+        study_name=optuna_study_name,
+        storage=storage,
+        load_if_exists=True,
+    )
 
-# Optimize
-metric_name = "auc"
-metric_fn = lambda logs: return logs[0][metric_name]
-suggestion_rules = {}
-pipeline_kwargs = {}
-n_trials = 100
-callbacks=[wandb_callback]
-study.optimize(lambda trial: objective(trial, metric_name=metric_name, metric_fn=metric_fn, suggestion_rules=suggestion_rules, pipeline=pipeline_titok, pipeline_kwargs=pipeline_kwargs), n_trials=n_trials, callbacks=callbacks)
-
+    # Optimize
+    wandb_callback = WeightsAndBiasesCallback(metric_name=metric_name, as_multirun=True)
+    callbacks=[wandb_callback]
+    study.optimize(
+            lambda trial: objective(
+                trial,
+                metric_name=metric_name,
+                metric_fn=metric_fn,
+                suggestion_rules=suggestion_rules,
+                pipeline=pipeline_titok,
+                pipeline_kwargs=pipeline_kwargs
+            ),
+            n_trials=n_trials,
+            callbacks=callbacks
+        )
 
 #----------------------------------------------------------------------------------------------------#
 # Script
@@ -1913,7 +1907,7 @@ sampler_val = WeightedRandomSampler(weights=sampler_val_weights,
 
 # Create DataLoaders
 src_val_loader = DataLoader(src_val_ds, batch_size=batch_size, sampler=sampler_val, drop_last=drop_last)
-src_val_loader_unweighted = DataLoader(src_val_ds, batch_size=batch_size, shuffle=True, drop_last=drop_last)
+src_val_loader = DataLoader(src_val_ds, batch_size=batch_size, shuffle=True, drop_last=drop_last)
 tgt_val_loader = DataLoader(tgt_val_ds, batch_size=batch_size, shuffle=True, drop_last=drop_last)
 
 #--------------------------------------------------------#
@@ -2198,7 +2192,7 @@ with open(logs_path, "w") as f:
         'tgt_val_logs':[el if type(el)!=torch.Tensor else el.tolist() for el in src_val_logs]
     }, f, indent=2)
 
-src_embeds, src_labels, src_domains, src_preds = collect_embeddings(encoder, clf, src_val_loader_unweighted, device, domain_label=0)
+src_embeds, src_labels, src_domains, src_preds = collect_embeddings(encoder, clf, src_val_loader, device, domain_label=0)
 tgt_embeds, tgt_labels, tgt_domains, tgt_preds = collect_embeddings(encoder, clf, tgt_val_loader, device, domain_label=1)
 
 # Combine
@@ -2235,7 +2229,7 @@ tgt_kinematics_plot_path = 'tgt_kinematics_plot.pdf'
 axs = None
 
 # Get kinematics for source and target domains
-src_sg_kin, src_bg_kin = get_kinematics(encoder, clf, src_val_loader_unweighted, threshold=best_thr, device=device,
+src_sg_kin, src_bg_kin = get_kinematics(encoder, clf, src_val_loader, threshold=best_thr, device=device,
                                   class_idx_signal=1, class_idx_background=0)
 tgt_sg_kin, tgt_bg_kin = get_kinematics(encoder, clf, tgt_val_loader, threshold=best_thr, device=device,
                                   class_idx_signal=1, class_idx_background=0)
