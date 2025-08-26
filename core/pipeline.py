@@ -1,4 +1,3 @@
-# ----------------------------------------------------------------------------------------------------#
 # PIPELINE
 from torch_geometric.datasets import TUDataset
 from torch_geometric.loader import DataLoader
