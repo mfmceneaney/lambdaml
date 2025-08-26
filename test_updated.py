@@ -1946,8 +1946,14 @@ def pipeline_titok(
     kinematics_axs = None,
     
     # Model save arguments
-    model_path = "model.pt",
-    model_params_path = "model_params.json",
+    encoder_path = "encoder.pt",
+    encoder_params_path = "encoder_params.json",
+    clf_path = "clf.pt",
+    clf_params_path = "clf_params.json",
+
+    # Optuna trial
+    trial = None,
+    **kwargs
     ):
 
     # Create output directory
@@ -2072,10 +2078,10 @@ def pipeline_titok(
     )
 
     # Save model
-    torch.save(model.state_dict(), osp.join(out_dir,model_path))
+    torch.save(encoder.state_dict(), osp.join(out_dir,encoder_path))
 
     # Save model parameters to json
-    with open(osp.join(out_dir, model_params_path), 'w') as f:
+    with open(osp.join(out_dir, encoder_params_path), 'w') as f:
         json.dump({
             'gnn_type': gnn_type,
             'in_dim_gnn': num_node_features,
@@ -2083,12 +2089,27 @@ def pipeline_titok(
             'num_layers_gnn': num_layers_gnn,
             'dropout_gnn': dropout_gnn,
             'heads_gnn': heads,
+        }, f)
+
+    # Save classifier
+    torch.save(clf.state_dict(), osp.join(out_dir,clf_path))
+
+    # Save classifier parameters to json
+    with open(osp.join(out_dir, clf_params_path), 'w') as f:
+        json.dump({
             'in_dim_clf':hdim_gnn * (heads if gnn_type=="gat" else 1),
             'num_layers_clf': num_layers_clf,
             'hdim_clf': hdim_clf,
             'dropout_clf': dropout_clf,
             'out_dim_clf':num_classes,
         }, f)
+
+    # Record output paths of models and parameters for trial
+    if trial is not None:
+        trial.set_user_attr("encoder_path",encoder_path)
+        trial.set_user_attr("encoder_params_path",encoder_params_path)
+        trial.set_user_attr("clf_path", clf_path)
+        trial.set_user_attr("clf_params_path", clf_params_path)
 
     #----- Test model
     temp = temp_fn if not callable(temp_fn) else temp_fn(nepochs,nepochs)
@@ -2341,7 +2362,7 @@ import sqlite3
 def objective(trial, metric_name="auc", metric_fn=lambda logs: return logs["auc"], suggestion_rules={}, pipeline=pipeline_titok, pipeline_kwargs={}):
 
     #----- Sample hyperparameters -----#
-    suggestions = {}
+    suggestions = {"trial":trial}
 
     # Loop suggestion rules
     for key in suggestion_rules:
@@ -2388,6 +2409,8 @@ def objective(trial, metric_name="auc", metric_fn=lambda logs: return logs["auc"
     output_dir = osp.join(experiment_dir,trial_id)
     osp.makedirs(output_dir exist_ok=True)
     suggestions["output_dir"] = output_dir
+    trial.set_user_attr("output_dir", output_dir)
+    trial.set_user_attr("trial_id", trial_id)
 
     # Log to wandb
     wandb_run = wandb.init(
@@ -2402,13 +2425,7 @@ def objective(trial, metric_name="auc", metric_fn=lambda logs: return logs["auc"
     try:
         pipeline_kwargs_updated = pipeline_kwargs.copy()
         pipeline_kwargs_updated.update(suggestions)
-        logs = pipeline(
-            config_dir=output_dir,
-            lr=lr,
-            dropout=dropout,
-            weight_decay=weight_decay,
-            **pipeline_kwargs_updated
-        )
+        logs = pipeline(**pipeline_kwargs_updated)
     except Exception as e:
         wandb_run.finish(exit_code=1)
         raise optuna.exceptions.TrialPruned()  # or fail silently
