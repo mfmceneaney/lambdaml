@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as F
 
 # Local imports
-from validate import *
+from .validate import *
 
 
 def alpha_fn(epoch, total_epochs, coefficient=0.05):

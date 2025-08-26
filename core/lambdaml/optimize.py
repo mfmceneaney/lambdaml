@@ -6,7 +6,7 @@ import os
 from uuid import uuid4
 
 # Local imports
-from pipeline import pipeline_titok
+from .pipeline import pipeline_titok
 
 
 # Define the objective function

@@ -8,12 +8,12 @@ from os import makedirs
 import json
 
 # Local imports
-from data import *
-from preprocess import *
-from models import *
-from train import *
-from validate import *
-from plot import *
+from .data import *
+from .preprocess import *
+from .models import *
+from .train import *
+from .validate import *
+from .plot import *
 
 
 def pipeline_titok(
