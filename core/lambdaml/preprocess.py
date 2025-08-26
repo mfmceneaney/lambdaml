@@ -1,11 +1,9 @@
 # PREPROCESSING
+# pylint: disable=no-member
 import numpy as np
 import awkward as ak
 import torch
-from torch_geometric.data import Data, Dataset
-import hipopy.hipopy as hp
 from particle import PDGID
-import tqdm
 
 
 def get_bank_keys(bank_name, all_keys, separator="_"):
@@ -65,15 +63,6 @@ def get_link_indices(event_table_rec_particle, event_table, pindex_idx=1):
     return np.array(
         link_indices, dtype=int
     )  # NOTE: link_indices = [(event_table_idx,rec_particle_idx)]
-
-
-def get_parent_indices(mc_event_table, index_idx=0, parent_idx=4, daughter_idx=5):
-    """
-    TODO
-    """
-    for mc_event_table_idx, index in enumerate(mc_event_table[:, index_idx]):
-        pass
-    pass
 
 
 def get_match_indices(
@@ -159,7 +148,7 @@ def get_match_indices(
     mc_phi = np.arctan2(mc_py, mc_px)
 
     # Loop rec particles
-    for rec_idx, rec_part in enumerate(rec_event_table):
+    for rec_idx, _ in enumerate(rec_event_table):
 
         # Start with final state particles past scattered electron
         if rec_idx < rec_final_state_min_idx:
@@ -171,7 +160,7 @@ def get_match_indices(
         # Loop mc particles
         mc_match_idx = -1
         min_domega = 9999
-        for mc_idx, mc_part in enumerate(mc_event_table):
+        for mc_idx, _ in enumerate(mc_event_table):
 
             # Start with final state particles past scattered electron
             if mc_idx < mc_final_state_min_idx:
@@ -306,7 +295,7 @@ def check_has_decay(
     decay_indices = None
     rec_indices = [
         -1 for i in range(len(decay[1]))
-    ]  # NOTE: This assumes a 1-level decay...#TODO: Write more robust algorithm.
+    ]  # NOTE: This assumes a 1-level decay...
     if np.max(match_indices[:, -1]) == -1:
         return has_decay, rec_indices  # NOTE: This is the case of no matches at all.
 
@@ -338,7 +327,7 @@ def check_has_decay(
                     ",",
                     mc_lund_pid_idx,
                     "]",
-                )
+                ) from e
             daughter_parents = mc_lund_event_table[
                 daughter_idx : daughter_idx + len(decay[1]), mc_lund_parent_idx
             ]
@@ -412,7 +401,7 @@ def replace_pids(arr, pid_map, pid_i=0):
 def preprocess_rec_particle(
     data_event_tables,
     rec_particle_bank_name="REC::Particle",
-    rec_particle_entry_indices=[
+    rec_particle_entry_indices=(
         0,
         1,
         2,
@@ -420,8 +409,7 @@ def preprocess_rec_particle(
         9,
         10,
         11,
-    ],  # pid, px, py, pz, (vx, vy, vz, vt (Only in MC?), charge), beta, chi2pid, status #TODO: SET THESE OUTSIDE LOOPS
-    **kwargs,
+    ),  # pid, px, py, pz, (vx, vy, vz, vt (Only in MC?), charge), beta, chi2pid, status
 ):
     """
     :description: Run preprocessing on input array.
@@ -438,12 +426,12 @@ def preprocess_rec_particle(
     )
 
     # Set new indices: 0-6 : pid, px, py, pz, beta, chi2pid, status
-    pid_idx, px_idx, py_idx, pz_idx, beta_idx, chi2pid_idx, status_idx = [
-        i for i in range(np.shape(x)[-1])
+    _, px_idx, py_idx, pz_idx, beta_idx, chi2pid_idx, status_idx = [
+        i for i in range(np.shape(rec_particle_event_x)[-1])
     ]
 
     # Copy data
-    x_copy = rec_particle_event_x.copy()
+    x = rec_particle_event_x.copy()
 
     # Set pid map
     pid_map = {
@@ -488,7 +476,7 @@ def preprocess_rec_particle(
     x[:, beta_idx] = beta
 
     # Preprocess chi2pid
-    chi2_max, chi2_default, chi2_replacement = (
+    chi2_max, _, chi2_replacement = (
         10,
         9999,
         10,
@@ -522,7 +510,7 @@ def preprocess_rec_particle(
     return x, edge_index
 
 
-def label_rec_particle(data_event_tables, **kwargs):
+def label_rec_particle(data_event_tables, decay=(3122, (2212, -211))):
 
     # Set static bank info
     rec_particle_bank_name = "REC::Particle"
@@ -545,11 +533,11 @@ def label_rec_particle(data_event_tables, **kwargs):
     ]  # NOTE: This should always be added
 
     # Get MC::Lund bank and MC->REC matching indices
-    mc_lund_event_table = event_tables[mc_lund_bank_name]
+    mc_lund_event_table = data_event_tables[mc_lund_bank_name]
     match_indices = get_match_indices(rec_particle_event_table, mc_lund_event_table)
 
     # Check MC::Lund matched indices for Lambda decay and set event label accordingly
-    has_decay, rec_indices = check_has_decay(
+    has_decay, _ = check_has_decay(
         rec_particle_event_table,
         mc_lund_event_table,
         match_indices,
@@ -565,20 +553,15 @@ def label_rec_particle(data_event_tables, **kwargs):
     return y
 
 
-def get_kinematics_rec_particle(data_event_tables, **kwargs):
+def get_kinematics_rec_particle(data_event_tables):
 
     # Set static bank info
     rec_kinematics_bank_name = "REC::Kinematics"
-    rec_kinematics_entry_indices = [
-        i for i in range(11)
-    ]  # idxe, idxp, idxpi, Q2, nu, W, x, y, z, xF, mass
 
     # Get REC::Kinematics bank
-    rec_kinematics_event_table = (
-        data_event_tables[rec_kinematics_bank_name] if add_kinematics else None
-    )
+    rec_kinematics_event_table = data_event_tables[rec_kinematics_bank_name]
 
-    # Select first entry for REC::Kinematics #TODO: Think about this.
+    # Select first entry for REC::Kinematics
     rec_kinematics_event_table = np.take(
         rec_kinematics_event_table, [0], axis=0
     )  # NOTE: ONLY LOOK AT FIRST ENTRY FOR COMPATIBILITY
@@ -597,10 +580,10 @@ def preprocess_rec_traj(x):
     # NOTE: Assume indices go 0-10 : pindex, index, detector, layer, x, y, z, cx, cy, cz, path
 
     (
-        pindex_idx,
-        index_idx,
-        detector_idx,
-        layer_idx,
+        _,  # pindex_idx
+        _,  # index_idx
+        _,  # detector_idx
+        _,  # layer_idx
         x_idx,
         y_idx,
         z_idx,

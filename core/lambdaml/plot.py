@@ -1,4 +1,8 @@
 # PLOT
+# pylint: disable=no-member
+import torch
+import torch.nn.functional as F
+import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import ks_2samp
 from sklearn.manifold import TSNE
@@ -15,8 +19,8 @@ def plot_epoch_metrics(
     xscale=None,
     legend_bbox_to_anchor=(1.05, 1),
     legend_loc="upper left",
-    epoch_metrics=[],
-    plot_kwargs=[],
+    epoch_metrics=(),
+    plot_kwargs=(),
     normalize_to_max=True,
 ):
 
@@ -54,8 +58,8 @@ def plot_epoch_metrics(
 # Plot ROC
 def plot_roc(
     ax,
-    fpr=[],
-    tpr=[],
+    fpr=(),
+    tpr=(),
     roc_auc=0.0,
     best_fpr=0.0,
     best_tpr=0.0,
@@ -215,21 +219,27 @@ def plot_kinematics(
     bg_kin,
     kin_indices=None,
     kin_xlabels=None,
-    sg_hist_kwargs={
-        "bins": 50,
-        "alpha": 0.6,
-        "label": "Signal",
-        "color": "C0",
-        "density": True,
-    },
-    bg_hist_kwargs={
-        "bins": 50,
-        "alpha": 0.6,
-        "label": "Background",
-        "color": "C1",
-        "density": True,
-    },
+    sg_hist_kwargs=None,
+    bg_hist_kwargs=None,
 ):
+
+    # Check arguments
+    if sg_hist_kwargs is None:
+        sg_hist_kwargs = {
+            "bins": 50,
+            "alpha": 0.6,
+            "label": "Signal",
+            "color": "C0",
+            "density": True,
+        }
+    if bg_hist_kwargs is None:
+        bg_hist_kwargs = {
+            "bins": 50,
+            "alpha": 0.6,
+            "label": "Background",
+            "color": "C1",
+            "density": True,
+        }
 
     # Set number of kinematics
     n_kin = sg_kin.size(1) if type(sg_kin) == torch.Tensor else 0
@@ -249,6 +259,7 @@ def plot_kinematics(
         kin_xlabels = [f"Kin_{i}" for i in kin_indices]
 
     # Set and flatten axes
+    fig = None
     if axs is None or len(axs) == 0:
         fig, axs = plt.subplots(
             nrows=(len(kin_indices) + 1) // 2,

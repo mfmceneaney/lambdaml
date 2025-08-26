@@ -1,28 +1,56 @@
 # PIPELINE
+# pylint: disable=no-member
+import torch
 from torch_geometric.datasets import TUDataset
 from torch_geometric.loader import DataLoader
 from torch.optim.lr_scheduler import StepLR, LambdaLR
-from torch.utils.data import random_split, WeightedRandomSampler
+from torch.utils.data import random_split
 import os.path as osp
 from os import makedirs
 import json
+import matplotlib.pyplot as plt
+from tqdm import tqdm
+import hipopy.hipopy as hp
 
 # Local imports
-from .data import *
-from .preprocess import *
-from .models import *
-from .train import *
-from .validate import *
-from .plot import *
+from .data import (
+    SmallDataset,
+    LazyDataset,
+)
+from .preprocess import (
+    preprocess_rec_particle,
+    label_rec_particle,
+    get_kinematics_rec_particle,
+    get_bank_keys,
+    get_event_table,
+)
+from .models import FlexibleGNNEncoder, GraphClassifier
+from .train import (
+    sigmoid_growth,
+    train_titok,
+)
+from .validate import (
+    val_titok,
+    get_best_threshold,
+)
+from .plot import (
+    plot_epoch_metrics,
+    plot_roc,
+    plot_domain_preds,
+    collect_embeddings,
+    plot_tsne,
+    get_kinematics,
+    plot_kinematics,
+)
 
 
 def pipeline_titok(
     is_tudataset=False,
     use_lazy_dataset=False,
     out_dir="",
-    dataset_name=None,  # Note attempt to load TUDataset if given
     transform=None,  # T.Compose([T.ToUndirected(),T.KNNGraph(k=6),T.NormalizeFeatures()]),
     max_idx=1000,
+    ds_split=(0.8, 0.2),
     src_root="src_dataset/",
     tgt_root="tgt_dataset/",
     # loader arguments
@@ -42,28 +70,27 @@ def pipeline_titok(
     dropout_clf=0.4,
     # Learning rate arguments
     lr=0.001,
-    lr_scheduler="linear",  # None/'', step, and linear
-    lr_kwargs={"step_size": 10, "gamma": 0.5},  # NOTE: default for step
+    lr_scheduler_type="linear",  # None/'', step, and linear
+    lr_kwargs=None,  # NOTE: default for step
     soft_labels_temp=2,
     confidence_threshold=0.8,
     temp_fn=1.0,
     alpha_fn=1.0,
-    lambda_fn=lambda_fn,
+    lambda_fn=sigmoid_growth,
     coeff_mmd=0.3,
     coeff_auc=0.01,
     coeff_soft=0.25,
     pretrain_frac=0.2,
     verbose=False,
     return_labels=True,
-    pretraining=False,
     metrics_plot_path="metrics_plot.pdf",
     metrics_plot_figsize=(24, 12),
     logs_path="logs.json",
     tsne_plot_path="tsne_plot.pdf",
     tsne_plot_figsize=(20, 8),
     # Plot kinematics arguments
-    kin_indices=[i for i in range(3, 11)],
-    kin_xlabels=[
+    kin_indices=(i for i in range(3, 11)),
+    kin_xlabels=(
         "$Q^2$ (GeV$^2$)",
         "$\\nu$",
         "$W$ (GeV)",
@@ -72,8 +99,8 @@ def pipeline_titok(
         "$z_{p\\pi^{-}}$",
         "$x_{F p\\pi^{-}}$",
         "$M_{p\\pi^{-}}$ (GeV)",
-    ],  # 'idxe', 'idxp', 'idxpi',
-    best_thr=roc_info["best_thr"],
+    ),  # 'idxe', 'idxp', 'idxpi',
+    best_thr=0.5,
     src_kinematics_plot_path="src_kinematics_plot.pdf",
     tgt_kinematics_plot_path="tgt_kinematics_plot.pdf",
     kinematics_axs=None,
@@ -84,7 +111,6 @@ def pipeline_titok(
     clf_params_path="clf_params.json",
     # Optuna trial
     trial=None,
-    **kwargs,
 ):
 
     # Create output directory
@@ -137,6 +163,10 @@ def pipeline_titok(
                 tgt_root, transform=transform, pre_transform=None, pre_filter=None
             )[0:max_idx]
 
+    # Split datasets
+    src_train_ds, src_val_ds = random_split(src_ds, ds_split)
+    tgt_train_ds, tgt_val_ds = random_split(tgt_ds, ds_split)
+
     # Create DataLoaders
     src_train_loader = DataLoader(
         src_train_ds, batch_size=batch_size, shuffle=True, drop_last=drop_last
@@ -179,17 +209,18 @@ def pipeline_titok(
     optimizer = torch.optim.Adam(
         list(encoder.parameters()) + list(clf.parameters()), lr=lr
     )
-    scheduler = None
-    if lr_scheduler == "step":
-        scheduler = StepLR(optimizer, **lr_args)
-    if lr_scheduler == "linear":
+    lr_scheduler = None
+    if lr_scheduler_type == "step":
+        lr_scheduler = StepLR(optimizer, **lr_kwargs)
+    if lr_scheduler_type == "linear":
         lr_lambda = lambda epoch: (1 - (epoch / nepochs))
-        scheduler = LambdaLR(optimizer, lr_lambda)
+        lr_scheduler = LambdaLR(optimizer, lr_lambda)
 
     # ----- Train model
     train_logs, soft_labels = train_titok(
         encoder,
         clf,
+        optimizer,
         src_train_loader,
         tgt_train_loader,
         src_val_loader,
@@ -197,6 +228,7 @@ def pipeline_titok(
         num_classes=num_classes,
         soft_labels_temp=soft_labels_temp,
         nepochs=nepochs,
+        lr_scheduler=lr_scheduler,
         confidence_threshold=confidence_threshold,
         temp_fn=temp_fn,
         alpha_fn=alpha_fn,
@@ -213,7 +245,7 @@ def pipeline_titok(
     torch.save(encoder.state_dict(), osp.join(out_dir, encoder_path))
 
     # Save model parameters to json
-    with open(osp.join(out_dir, encoder_params_path), "w") as f:
+    with open(osp.join(out_dir, encoder_params_path), "w", encoding="utf-8") as f:
         json.dump(
             {
                 "gnn_type": gnn_type,
@@ -230,7 +262,7 @@ def pipeline_titok(
     torch.save(clf.state_dict(), osp.join(out_dir, clf_path))
 
     # Save classifier parameters to json
-    with open(osp.join(out_dir, clf_params_path), "w") as f:
+    with open(osp.join(out_dir, clf_params_path), "w", encoding="utf-8") as f:
         json.dump(
             {
                 "in_dim_clf": hdim_gnn * (heads if gnn_type == "gat" else 1),
@@ -253,14 +285,16 @@ def pipeline_titok(
     temp = temp_fn if not callable(temp_fn) else temp_fn(nepochs, nepochs)
     alpha = alpha_fn if not callable(alpha_fn) else alpha_fn(nepochs, nepochs)
     lambd = lambda_fn if not callable(lambda_fn) else lambda_fn(nepochs, nepochs)
+    soft_labels = None
     src_val_logs = val_titok(
         encoder,
         clf,
+        optimizer,
         src_val_loader,
         tgt_val_loader,
         soft_labels,
         return_labels=return_labels,
-        pretraining=pretraining,
+        pretraining=False,
         num_classes=num_classes,
         confidence_threshold=confidence_threshold,
         temp=temp,
@@ -270,17 +304,17 @@ def pipeline_titok(
         coeff_auc=coeff_auc,
         coeff_soft=coeff_soft,
         device=device,
-        verbose=verbose,
     )
 
     tgt_val_logs = val_titok(
         encoder,
         clf,
+        optimizer,
         tgt_val_loader,
         tgt_val_loader,
         soft_labels,
         return_labels=return_labels,
-        pretraining=pretraining,
+        pretraining=False,
         num_classes=num_classes,
         confidence_threshold=confidence_threshold,
         temp=temp,
@@ -290,34 +324,16 @@ def pipeline_titok(
         coeff_auc=coeff_auc,
         coeff_soft=coeff_soft,
         device=device,
-        verbose=verbose,
     )
 
     # Pop src validation log values
-    src_val_loss = src_val_logs["loss"]
-    src_val_loss_cls = src_val_logs["loss_cls"]
-    src_val_loss_mmd = src_val_logs["loss_mmd"]
-    src_val_loss_auc = src_val_logs["loss_auc"]
-    src_val_loss_soft = src_val_logs["loss_soft"]
-    src_val_acc_raw = src_val_logs["acc_raw"]
-    src_val_acc_per_class = src_val_logs["acc_per_class"]
-    src_acc_balanced = src_val_logs["acc_balanced"]
     src_probs = src_val_logs["probs"]
     src_preds = src_val_logs["preds"]
     src_labels = src_val_logs["labels"]
 
     # Pop tgt validation log values
-    tgt_val_loss = tgt_val_logs["loss"]
-    tgt_val_loss_cls = tgt_val_logs["loss_cls"]
-    tgt_val_loss_mmd = tgt_val_logs["loss_mmd"]
-    tgt_val_loss_auc = tgt_val_logs["loss_auc"]
-    tgt_val_loss_soft = tgt_val_logs["loss_soft"]
-    tgt_val_acc_raw = tgt_val_logs["acc_raw"]
-    tgt_val_acc_per_class = tgt_val_logs["acc_per_class"]
-    tgt_acc_balanced = tgt_val_logs["acc_balanced"]
     tgt_probs = tgt_val_logs["probs"]
     tgt_preds = tgt_val_logs["preds"]
-    tgt_labels = tgt_val_logs["labels"]
 
     # Create figure
     fig, axs = plt.subplots(2, 3, figsize=metrics_plot_figsize)
@@ -420,7 +436,7 @@ def pipeline_titok(
     plot_domain_preds(axs[0, 0], src_probs[:, 1], tgt_probs[:, 1])
 
     # Plot ROC AUC curve
-    roc_info, thresholds = get_best_threshold(src_labels, src_probs[:, 1])
+    roc_info, _ = get_best_threshold(src_labels, src_probs[:, 1])
     plot_roc(axs[1, 0], **roc_info)
 
     # Save and show plot
@@ -428,7 +444,7 @@ def pipeline_titok(
     fig.savefig(osp.join(out_dir, metrics_plot_path))
 
     # Save training logs
-    with open(osp.join(out_dir, logs_path), "w") as f:
+    with open(osp.join(out_dir, logs_path), "w", encoding="utf-8") as f:
         json.dump(
             {
                 "train": train_logs,
@@ -449,13 +465,12 @@ def pipeline_titok(
     src_embeds, src_labels, src_domains, src_preds = collect_embeddings(
         encoder, clf, src_val_loader, device, domain_label=0
     )
-    tgt_embeds, tgt_labels, tgt_domains, tgt_preds = collect_embeddings(
+    tgt_embeds, _, tgt_domains, tgt_preds = collect_embeddings(
         encoder, clf, tgt_val_loader, device, domain_label=1
     )
 
     # Combine
     all_embeds = torch.cat([src_embeds, tgt_embeds], dim=0)
-    all_labels = torch.cat([src_labels, tgt_labels], dim=0)
     all_domains = torch.cat([src_domains, tgt_domains], dim=0)
     all_preds = torch.cat([src_preds, tgt_preds], dim=0)
     labels_and_preds = torch.cat([src_labels, tgt_preds], dim=0)
@@ -508,7 +523,7 @@ def pipeline_titok(
     try:
 
         # Plot kinematics for source and target domains
-        src_fig, src_axs = plot_kinematics(
+        src_fig, _ = plot_kinematics(
             kinematics_axs,
             src_sg_kin,
             src_bg_kin,
@@ -529,7 +544,7 @@ def pipeline_titok(
                 "density": True,
             },
         )
-        tgt_fig, tgt_axs = plot_kinematics(
+        tgt_fig, _ = plot_kinematics(
             kinematics_axs,
             tgt_sg_kin,
             tgt_bg_kin,
@@ -574,18 +589,18 @@ def pipeline_titok(
 def pipeline_preprocessing(
     # Set functions and kwargs
     preprocessing_fn=preprocess_rec_particle,
-    labelling_fn=None,
-    kinematics_fn=None,
-    preprocessing_fn_kwargs={},
-    labelling_fn_kwargs={},
-    kinematics_fn_kwargs={},
+    labelling_fn=label_rec_particle,
+    kinematics_fn=get_kinematics_rec_particle,
+    preprocessing_fn_kwargs=None,
+    labelling_fn_kwargs=None,
+    kinematics_fn_kwargs=None,
     # Set input files, banks, and step size
-    file_list=["file_*.hipo"],
-    data_banks=[
+    file_list=("file_*.hipo"),
+    banks=(
         "REC::Particle",
         "REC::Kinematics",
         "MC::Lund",
-    ],
+    ),
     step=1000,
     # Set output dataset and path names
     out_dataset_path="src_root/",
@@ -593,13 +608,19 @@ def pipeline_preprocessing(
     num_workers=0,
 ):
 
+    # Check arguments
+    if preprocessing_fn_kwargs is None:
+        preprocessing_fn_kwargs = {}
+    if labelling_fn_kwargs is None:
+        labelling_fn_kwargs = {}
+    if kinematics_fn_kwargs is None:
+        kinematics_fn_kwargs = {}
+
     # Initialize graph list
     datalist = []
 
     # Iterate hipo files
-    for batch_num, batch in tqdm.tqdm(
-        enumerate(hp.iterate(file_list, banks=banks, step=step))
-    ):
+    for batch in tqdm.tqdm(hp.iterate(file_list, banks=banks, step=step)):
 
         # Set bank names and entry names to look at
         all_keys = list(batch.keys())
@@ -638,7 +659,7 @@ def pipeline_preprocessing(
             datalist.append(data)
 
     # Create (or add to) a PyG Dataset
-    dataset = LazyDataset(
+    LazyDataset(
         out_dataset_path,
         transform=None,
         pre_transform=None,

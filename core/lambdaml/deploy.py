@@ -1,12 +1,14 @@
 # DEPLOY
+# pylint: disable=no-member
 import torch
 from torch_geometric.data import Data
 import json
 import optuna
 import shutil
+import os.path as osp
 
 # Local imports
-from .models import *
+from .models import FlexibleGNNEncoder, GraphClassifier
 
 
 class TITOKModelWrapper:
@@ -23,9 +25,9 @@ class TITOKModelWrapper:
 
         # Load encoder
         encoder_params = {}
-        with open(encoder_params_path, "r") as f:
+        with open(encoder_params_path, "r", encoding="utf-8") as f:
             encoder_params = json.load(f)
-        self.encoder = type_encoder(**encoder_params)
+        self.encoder = encoder_type(**encoder_params)
         self.encoder.load_state_dict(
             torch.load(encoder_path, map_location=map_location)
         )
@@ -33,9 +35,9 @@ class TITOKModelWrapper:
 
         # Load classifier
         clf_params = {}
-        with open(clf_params_path, "r") as f:
+        with open(clf_params_path, "r", encoding="utf-8") as f:
             clf_params = json.load(f)
-        self.clf = type_clf(**clf_params)
+        self.clf = clf_type(**clf_params)
         self.clf.load_state_dict(torch.load(clf_path, map_location=map_location))
         self.clf.eval()
 
@@ -52,7 +54,7 @@ class TITOKModelWrapper:
         with torch.no_grad():
             feat = self.encoder(data)
             logit = self.clf(feat)
-            prob = torch.softmax(logits, dim=1).item()
+            prob = torch.softmax(logit, dim=1).item()
 
         return prob
 
@@ -69,7 +71,8 @@ def select_best_model(
 
     # Connect to the study in the SQL DB
     study = optuna.load_study(
-        study_name="gnn_study", storage="sqlite:///optuna.db"  # or use your DB URI
+        study_name=optuna_study_name,
+        storage=optuna_storage,  # or use your DB URI
     )
 
     # Get the best trial

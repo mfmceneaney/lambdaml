@@ -1,13 +1,18 @@
 # EVAL
+# pylint: disable=no-member
 import numpy as np
 import torch
 import torch.nn.functional as F
 from sklearn.metrics import roc_curve, auc
 
+# Local imports
+from .functional import loss_titok
+
 
 def val_titok(
     encoder,
     clf,
+    optimizer,
     src_val_loader,
     tgt_val_loader,
     soft_labels,
@@ -15,14 +20,13 @@ def val_titok(
     return_labels=True,
     num_classes=2,
     confidence_threshold=0.8,
-    temp=1.0,
-    alpha=1.0,
+    temp=2.0,
+    alpha=0.5,
     lambd=1.0,
     coeff_mmd=0.3,
     coeff_auc=0.01,
     coeff_soft=0.25,
     device="cuda:0",
-    verbose=True,
 ):
 
     # Set models in eval mode
@@ -71,9 +75,13 @@ def val_titok(
                 tgt_feats,
                 tgt_logits,
                 soft_labels,
-                loss_auc_alpha=0.5,
-                loss_soft_temperature=2.0,
+                loss_auc_alpha=alpha,
+                loss_soft_temperature=temp,
                 confidence_threshold=confidence_threshold,
+                coeff_mmd=coeff_mmd,
+                lambd=lambd,
+                coeff_auc=coeff_auc,
+                coeff_soft=coeff_soft,
                 num_classes=num_classes,
                 pretraining=pretraining,
                 device=device,
@@ -132,76 +140,76 @@ def val_titok(
     return logs
 
 
-def eval_disc(src_loader, tgt_loader, return_labels=False):
+# def eval_disc(src_loader, tgt_loader, return_labels=False):
 
-    # Set models to evaluation mode
-    encoder.eval()
-    disc.eval()
+#     # Set models to evaluation mode
+#     encoder.eval()
+#     disc.eval()
 
-    # Initialize variables and arrays
-    loss = 0
-    correct = 0
-    total = 0
-    probs = []
-    preds = []
-    labels = []
+#     # Initialize variables and arrays
+#     loss = 0
+#     correct = 0
+#     total = 0
+#     probs = []
+#     preds = []
+#     labels = []
 
-    # Loop source and target domain data
-    with torch.no_grad():
-        for src_batch, tgt_batch in zip(src_loader, tgt_loader):
+#     # Loop source and target domain data
+#     with torch.no_grad():
+#         for src_batch, tgt_batch in zip(src_loader, tgt_loader):
 
-            # Get source batch embedding and logits
-            src_batch = src_batch.to(device)
-            src_feats = encoder(src_batch.x, src_batch.edge_index, src_batch.batch)
-            src_logits = disc(src_feats)
+#             # Get source batch embedding and logits
+#             src_batch = src_batch.to(device)
+#             src_feats = encoder(src_batch.x, src_batch.edge_index, src_batch.batch)
+#             src_logits = disc(src_feats)
 
-            # Get target batch embedding and logits
-            tgt_batch = tgt_batch.to(device)
-            tgt_feats = encoder(tgt_batch.x, tgt_batch.edge_index, tgt_batch.batch)
-            tgt_logits = disc(tgt_feats)
+#             # Get target batch embedding and logits
+#             tgt_batch = tgt_batch.to(device)
+#             tgt_feats = encoder(tgt_batch.x, tgt_batch.edge_index, tgt_batch.batch)
+#             tgt_logits = disc(tgt_feats)
 
-            # Get domain classification predictions and loss
-            dom_feats = torch.cat([src_feats, tgt_feats], dim=0)
-            dom_labels = torch.cat(
-                [
-                    torch.zeros(src_feats.size(0), dtype=torch.long),
-                    torch.ones(tgt_feats.size(0), dtype=torch.long),
-                ],
-                dim=0,
-            ).to(device)
-            dom_logits = disc(dom_feats, alpha=alpha)
-            dom_loss = F.cross_entropy(dom_logits, dom_labels)
-            dom_probs = F.softmax(dom_logits, dim=0)
-            dom_preds = dom_probs.argmax(dim=1)
+#             # Get domain classification predictions and loss
+#             dom_feats = torch.cat([src_feats, tgt_feats], dim=0)
+#             dom_labels = torch.cat(
+#                 [
+#                     torch.zeros(src_feats.size(0), dtype=torch.long),
+#                     torch.ones(tgt_feats.size(0), dtype=torch.long),
+#                 ],
+#                 dim=0,
+#             ).to(device)
+#             dom_logits = disc(dom_feats, alpha=alpha)
+#             dom_loss = F.cross_entropy(dom_logits, dom_labels)
+#             dom_probs = F.softmax(dom_logits, dim=0)
+#             dom_preds = dom_probs.argmax(dim=1)
 
-            # Record total loss
-            loss += dom_loss.item()
+#             # Record total loss
+#             loss += dom_loss.item()
 
-            # Record domain correct predictions, logits, and labels
-            correct += (dom_preds == dom_labels).sum().item()
-            total += dom_labels.size(0)
-            if return_labels:
-                probs.extend(dom_probs.cpu().tolist())
-                preds.extend(dom_preds.cpu().tolist())
-                labels.extend(dom_labels.cpu().tolist())
+#             # Record domain correct predictions, logits, and labels
+#             correct += (dom_preds == dom_labels).sum().item()
+#             total += dom_labels.size(0)
+#             if return_labels:
+#                 probs.extend(dom_probs.cpu().tolist())
+#                 preds.extend(dom_preds.cpu().tolist())
+#                 labels.extend(dom_labels.cpu().tolist())
 
-        # Compute accuracy
-        acc = correct / total
+#         # Compute accuracy
+#         acc = correct / total
 
-        # Convert lists to torch tensors
-        probs = torch.tensor(probs)
-        preds = torch.tensor(preds)
-        labels = torch.tensor(labels)
+#         # Convert lists to torch tensors
+#         probs = torch.tensor(probs)
+#         preds = torch.tensor(preds)
+#         labels = torch.tensor(labels)
 
-    logs = {
-        "loss": loss,
-        "acc": acc,
-        "probs": probs,
-        "preds": preds,
-        "dom_labels": dom_labels,
-    }
+#     logs = {
+#         "loss": loss,
+#         "acc": acc,
+#         "probs": probs,
+#         "preds": preds,
+#         "dom_labels": dom_labels,
+#     }
 
-    return logs
+#     return logs
 
 
 def get_best_threshold(labels, probs):

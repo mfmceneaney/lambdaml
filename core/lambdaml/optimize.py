@@ -1,4 +1,5 @@
 # OPTIMIZE
+# pylint: disable=no-member
 import optuna
 from optuna.integration.wandb import WeightsAndBiasesCallback
 import wandb
@@ -12,14 +13,19 @@ from .pipeline import pipeline_titok
 # Define the objective function
 def objective(
     trial,
+    wandb_project="wandb_project",
     metric_name="auc",
     metric_fn=lambda logs: logs["auc"],
-    suggestion_rules={},
+    suggestion_rules=None,
     pipeline=pipeline_titok,
-    pipeline_kwargs={},
+    pipeline_kwargs=None,
 ):
 
     # ----- Sample hyperparameters -----#
+    if suggestion_rules is None:
+        suggestion_rules = {}
+    if pipeline_kwargs is None:
+        pipeline_kwargs = {}
     suggestions = {"trial": trial}
 
     # Loop suggestion rules
@@ -52,7 +58,7 @@ def objective(
                 list,
                 tuple,
             ):
-                suggestion_value = suggestion_rule["values"]
+                suggestion_values = suggestion_rule["values"]
 
                 # Sample based on type
                 if suggestion_type == "categorical":
@@ -93,9 +99,9 @@ def objective(
         pipeline_kwargs_updated = pipeline_kwargs.copy()
         pipeline_kwargs_updated.update(suggestions)
         logs = pipeline(**pipeline_kwargs_updated)
-    except Exception as e:
+    except Exception as exc:
         wandb_run.finish(exit_code=1)
-        raise optuna.exceptions.TrialPruned()  # or fail silently
+        raise optuna.exceptions.TrialPruned() from exc  # or fail silently
 
     # Get the AUC from first log dictionary
     metric = metric_fn(logs)
@@ -113,10 +119,18 @@ def optimize(
     optuna_study_name="model_hpo",
     metric_name="auc",
     metric_fn=lambda logs: logs[0]["auc"],
-    suggestion_rules={},
-    pipeline_kwargs={},
+    suggestion_rules=None,
+    pipeline_kwargs=None,
     n_trials=100,
 ):
+
+    # Check arguments
+    if not callable(metric_fn):
+        raise TypeError("metric_fn must be callable")
+    if suggestion_rules is None:
+        suggestion_rules = {}
+    if pipeline_kwargs is None:
+        pipeline_kwargs = {}
 
     # Create database
     storage = optuna.storages.RDBStorage(

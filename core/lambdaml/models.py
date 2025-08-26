@@ -1,4 +1,6 @@
 # MODELS
+# pylint: disable=no-member
+# pylint: disable=abstract-method
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -11,15 +13,17 @@ from torch_geometric.nn import (
 )
 
 
-# Gradient Reversal Layer
+# Gradient Reversal Function
 class GradReverse(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, x, alpha):
+    def forward(ctx, *args, **kwargs):
+        x, alpha = args
         ctx.alpha = alpha
         return x.view_as(x)
 
     @staticmethod
-    def backward(ctx, grad_output):
+    def backward(ctx, *grad_outputs):
+        (grad_output,) = grad_outputs
         return -ctx.alpha * grad_output, None
 
 

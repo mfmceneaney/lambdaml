@@ -1,6 +1,8 @@
 # DATA
-from torch_geometric.data import Data, Dataset, InMemoryDataset, download_url
-import os.path as osp
+# pylint: disable=no-member
+import torch
+from torch_geometric.data import Data, Dataset, InMemoryDataset
+import os
 from glob import glob
 import multiprocessing
 from tqdm import tqdm
@@ -16,7 +18,7 @@ class SmallDataset(InMemoryDataset):
         transform=None,
         pre_transform=None,
         pre_filter=None,
-        datalist=[],
+        datalist=None,
         clean_keys=(),
     ):
         self.datalist = datalist
@@ -67,7 +69,7 @@ class SmallDataset(InMemoryDataset):
         # torch.save(self.collate(data_list), self.processed_paths[0])
 
     # def get(self, idx):
-    #     if self.datalist is None or len(self.datalist)==0: self.datalist = list(torch.load(osp.join(self.processed_dir, self.processed_file_names[0])))
+    #     if self.datalist is None or len(self.datalist)==0: self.datalist = list(torch.load(os.path.join(self.processed_dir, self.processed_file_names[0])))
     #     data = self.datalist[idx]
     #     return data
 
@@ -139,7 +141,7 @@ class LargeDataset(Dataset):
         # Save data
         torch.save(
             self.clean_data(data),
-            osp.join(self.processed_dir, self.processed_file_names[idx]),
+            os.path.join(self.processed_dir, self.processed_file_names[idx]),
             pickle_protocol=self.pickle_protocol,
         )
 
@@ -175,7 +177,9 @@ class LargeDataset(Dataset):
         return len(self.processed_file_names)
 
     def get(self, idx):
-        data = torch.load(osp.join(self.processed_dir, self.processed_file_names[idx]))
+        data = torch.load(
+            os.path.join(self.processed_dir, self.processed_file_names[idx])
+        )
         return data
 
 
@@ -229,11 +233,11 @@ class LazyDataset(Dataset):
             "batch_size": self.batch_size,
             "num_batches": self.num_batches,
         }
-        if not recreate and osp.exists(metadata_path):
+        if not recreate and os.path.exists(metadata_path):
 
             # First try opening file and reading metadata
             try:
-                with open(metadata_path, "r") as f:
+                with open(metadata_path, "r", encoding="utf-8") as f:
 
                     # Read metadata from previously saved dataset
                     metadata = json.load(f)
@@ -275,7 +279,7 @@ class LazyDataset(Dataset):
 
         # (Re)create the metadata file
         os.makedirs(self.root, exist_ok=True)
-        with open(metadata_path, "w") as f:
+        with open(metadata_path, "w", encoding="utf-8") as f:
             json.dump(metadata, f, indent=2)
 
         super().__init__(root, transform, pre_transform, pre_filter)
@@ -327,7 +331,7 @@ class LazyDataset(Dataset):
 
         torch.save(
             data,
-            osp.join(
+            os.path.join(
                 self.processed_dir,
                 self.processed_file_names[idx + self.process_batch_start_idx],
             ),
