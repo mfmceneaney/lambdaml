@@ -6,6 +6,6 @@ from sklearn.manifold import TSNE
 import pytest
 
 # Local imports
-from core.plot import *
+from lambdaml.plot import *
 
 # TODO

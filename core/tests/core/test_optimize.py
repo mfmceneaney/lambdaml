@@ -9,7 +9,7 @@ import sqlite3
 import pytest
 
 # Local imports
-from core.pipeline import pipeline_titok
-from core.optimize import *
+from lambdaml.pipeline import pipeline_titok
+from lambdaml.optimize import *
 
 # TODO

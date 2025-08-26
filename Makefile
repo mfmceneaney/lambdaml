@@ -3,7 +3,7 @@ install:
 		pip install -e .[test]
 
 format:
-	black core/*.py tests/core/*.py
+	black core/lambdaml/*.py core/tests/*.py
 
 lint:
 	pylint --max-args=1000 \
@@ -13,9 +13,9 @@ lint:
 		--max-module-lines=2000 \
 		--max-statements=100 \
 		--max-branches=20 \
-		--disable=R,C core/*.py tests/core/*.py
+		--disable=R,C core/lambdaml/*.py core/tests/*.py
 
 test:
-	python -m pytest core
+	python -m pytest core/tests
 
 all: install lint test

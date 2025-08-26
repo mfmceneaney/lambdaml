@@ -10,6 +10,6 @@ import json
 import pytest
 
 # Local imports
-from core.pipeline import *
+from lambdaml.pipeline import *
 
 # TODO

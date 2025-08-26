@@ -9,6 +9,6 @@ import shutil
 import pytest
 
 # Local imports
-from core.deploy import *
+from lambdaml.deploy import *
 
 # TODO

@@ -7,6 +7,6 @@ from sklearn.metrics import roc_curve, auc
 import pytest
 
 # Local imports
-from core.validate import *
+from lambdaml.validate import *
 
 # TODO

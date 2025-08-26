@@ -10,6 +10,6 @@ import json
 import pytest
 
 # Local imports
-from core.data import *
+from lambdaml.data import *
 
 # TODO

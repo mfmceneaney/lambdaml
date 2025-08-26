@@ -10,6 +10,6 @@ import tqdm
 import pytest
 
 # Local imports
-from core.preprocess import *
+from lambdaml.preprocess import *
 
 # TODO
