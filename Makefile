@@ -3,7 +3,7 @@ install:
 		pip install -e .[test]
 
 format:
-	black core/*.py tests/*.py
+	black core/*.py tests/core/*.py
 
 lint:
 	pylint --max-args=1000 \
