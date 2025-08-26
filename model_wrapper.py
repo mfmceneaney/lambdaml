@@ -47,7 +47,11 @@ class TITOKModelWrapper:
 def select_best_model(
         optuna_study_name="gnn_study",
         optuna_storage="sqlite:///optuna.db",
-        gnn_server_dir="gnn_server/"
+        gnn_server_dir="gnn_server/",
+        encoder_fname="encoder.pt",
+        encoder_params_fname="encoder_params.json",
+        clf_fname="clf.pt",
+        clf_params_fname="clf_params.json"
     ):
 
     # Connect to the study in the SQL DB
@@ -62,11 +66,16 @@ def select_best_model(
     # Access hyperparameters and custom user attributes
     print("Best trial value:", best_trial.value)
     print("Hyperparameters:", best_trial.params)
+    print("Trial user attributes:", best_trial.user_attrs)
 
-    # Load model file path (assuming you stored it in trial.set_user_attr)
-    model_path = best_trial.user_attrs["model_path"]
-    model_params_path = best_trial.user_attrs["model_params_path"]
+    # Load encoder and classifier file paths (assuming you stored them with trial.set_user_attr)
+    encoder_path = best_trial.user_attrs["encoder_path"]
+    encoder_params_path = best_trial.user_attrs["encoder_params_path"]
+    clf_path = best_trial.user_attrs["clf_path"]
+    clf_params_path = best_trial.user_attrs["clf_params_path"]
 
-    # Copy model and params to gnn server directory
-    shutil.copy(model_path, osp.join(gnn_server_dir,osp.basename(model_path)))
-    shutil.copy(model_params_path, osp.join(gnn_server_dir,osp.basename(model_params_path)))
+    # Copy models and params to gnn server directory
+    shutil.copy(encoder_path, osp.join(gnn_server_dir,encoder_fname))
+    shutil.copy(encoder_params_path, osp.join(gnn_server_dir,osp.basename(encoder_params_fname)))
+    shutil.copy(clf_path, osp.join(gnn_server_dir,osp.basename(clf_fname)))
+    shutil.copy(clf_params_path, osp.join(gnn_server_dir,osp.basename(clf_params_fname)))
