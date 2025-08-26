@@ -992,7 +992,7 @@ def get_best_threshold(labels, preds):
     best_idx = np.argmax(fom)
     best_fpr, best_tpr, best_fom, best_thr = fpr[best_idx], tpr[best_idx], fom[best_idx], thresholds[best_idx]
 
-    return fpr, tpr, thresholds, roc_auc, best_fpr, best_tpr, beest_fom, best_thr
+    return (fpr, tpr, roc_auc, best_fpr, best_tpr, best_fom, best_thr), thresholds
 
 #----------------------------------------------------------------------------------------------------#
 # PLOT
@@ -1001,7 +1001,7 @@ from scipy.stats import ks_2samp
 from sklearn.manifold import TSNE
 
 # Plot metrics by epoch
-def plot_epoch_metrics(ax, epochs, title='', xlabel='', ylabel='', yscale=None, xscale=None, legend_loc=None, losses=[], plot_kwargs=[], normalize_to_max=True):
+def plot_epoch_metrics(ax, epochs, title='', xlabel='', ylabel='', yscale=None, xscale=None, legend_loc=None, epoch_metrics=[], plot_kwargs=[], normalize_to_max=True):
     
     # Check dimensions of metrics and plotting arguments lists
     if len(epoch_metrics)!=len(plot_kwargs):
