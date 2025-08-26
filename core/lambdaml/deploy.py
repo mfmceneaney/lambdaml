@@ -1,10 +1,12 @@
 # DEPLOY
 import torch
 from torch_geometric.data import Data
-from models import *
 import json
 import optuna
 import shutil
+
+# Local imports
+from .models import *
 
 
 class TITOKModelWrapper:
