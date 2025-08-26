@@ -2,7 +2,7 @@
 Lambdaml - An ML Project for Lambda Hyperon Identification
 """
 
-__version__ = '0.0.0'
+__version__ = "0.0.0"
 
 from .data import *
 from .deploy import *

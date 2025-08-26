@@ -1,4 +1,4 @@
-#----------------------------------------------------------------------------------------------------#
+# ----------------------------------------------------------------------------------------------------#
 # MODELS
 import torch
 import torch.nn as nn
@@ -11,6 +11,7 @@ from torch_geometric.nn import (
     global_mean_pool,
 )
 
+
 # Gradient Reversal Layer
 class GradReverse(torch.autograd.Function):
     @staticmethod
@@ -22,15 +23,16 @@ class GradReverse(torch.autograd.Function):
     def backward(ctx, grad_output):
         return -ctx.alpha * grad_output, None
 
+
 class FlexibleGNNEncoder(nn.Module):
     def __init__(
         self,
         in_dim,
         hidden_dim,
         num_layers=2,
-        gnn_type='gcn',        # Options: 'gcn', 'sage', 'gat', 'gin'
+        gnn_type="gcn",  # Options: 'gcn', 'sage', 'gat', 'gin'
         dropout=0.5,
-        heads=1                # For GAT
+        heads=1,  # For GAT
     ):
         super().__init__()
 
@@ -41,28 +43,30 @@ class FlexibleGNNEncoder(nn.Module):
 
         # First layer
         self.convs.append(self._build_conv(self.gnn_type, in_dim, hidden_dim, heads))
-        self.bns.append(nn.BatchNorm1d(hidden_dim * (heads if self.gnn_type == 'gat' else 1)))
+        self.bns.append(
+            nn.BatchNorm1d(hidden_dim * (heads if self.gnn_type == "gat" else 1))
+        )
 
         # Hidden layers
         for _ in range(num_layers - 1):
-            in_ch = hidden_dim * (heads if self.gnn_type == 'gat' else 1)
+            in_ch = hidden_dim * (heads if self.gnn_type == "gat" else 1)
             out_ch = hidden_dim
             self.convs.append(self._build_conv(self.gnn_type, in_ch, out_ch, heads))
-            self.bns.append(nn.BatchNorm1d(out_ch * (heads if self.gnn_type == 'gat' else 1)))
+            self.bns.append(
+                nn.BatchNorm1d(out_ch * (heads if self.gnn_type == "gat" else 1))
+            )
 
     def _build_conv(self, gnn_type, in_dim, out_dim, heads):
-        if gnn_type == 'gcn':
+        if gnn_type == "gcn":
             return GCNConv(in_dim, out_dim)
-        elif gnn_type == 'sage':
+        elif gnn_type == "sage":
             return SAGEConv(in_dim, out_dim)
-        elif gnn_type == 'gat':
+        elif gnn_type == "gat":
             return GATConv(in_dim, out_dim, heads=heads, concat=True)
-        elif gnn_type == 'gin':
+        elif gnn_type == "gin":
             return GINConv(
                 nn.Sequential(
-                    nn.Linear(in_dim, out_dim),
-                    nn.ReLU(),
-                    nn.Linear(out_dim, out_dim)
+                    nn.Linear(in_dim, out_dim), nn.ReLU(), nn.Linear(out_dim, out_dim)
                 )
             )
         else:
@@ -75,6 +79,7 @@ class FlexibleGNNEncoder(nn.Module):
             x = F.relu(x)
             x = F.dropout(x, p=self.dropout, training=self.training)
         return global_mean_pool(x, batch)
+
 
 class GraphClassifier(nn.Module):
     def __init__(self, in_dim, out_dim, num_layers=2, hidden_dim=64, dropout=0.5):
@@ -99,6 +104,7 @@ class GraphClassifier(nn.Module):
                 x = F.dropout(x, p=self.dropout, training=self.training)
         return x
 
+
 class DomainDiscriminator(nn.Module):
     def __init__(self, in_dim, num_layers=2, hidden_dim=64, dropout=0.5):
         super().__init__()
@@ -122,14 +128,13 @@ class DomainDiscriminator(nn.Module):
                 x = F.dropout(x, p=self.dropout, training=self.training)
         return x
 
+
 # Projection head for contrastive loss
 class ProjectionHead(nn.Module):
     def __init__(self, in_dim, proj_dim):
         super().__init__()
         self.proj = nn.Sequential(
-            nn.Linear(in_dim, proj_dim),
-            nn.ReLU(),
-            nn.Linear(proj_dim, proj_dim)
+            nn.Linear(in_dim, proj_dim), nn.ReLU(), nn.Linear(proj_dim, proj_dim)
         )
 
     def forward(self, x):

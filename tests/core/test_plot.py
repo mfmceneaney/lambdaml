@@ -1,4 +1,4 @@
-#----------------------------------------------------------------------------------------------------#
+# ----------------------------------------------------------------------------------------------------#
 # PLOT
 import matplotlib.pyplot as plt
 from scipy.stats import ks_2samp
@@ -8,4 +8,4 @@ import pytest
 # Local imports
 from core.plot import *
 
-#TODO
+# TODO
