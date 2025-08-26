@@ -1,6 +1,6 @@
 # app.py
 from flask import Flask, request, jsonify
-from deploy import ModelWrapper
+from core.deploy import ModelWrapper
 
 app = Flask(__name__)
 model = ModelWrapper()

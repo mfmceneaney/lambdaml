@@ -5,7 +5,6 @@ from optuna.integration.wandb import WeightsAndBiasesCallback
 import wandb
 import os
 from uuid import uuid4
-from pathlib import Path
 import sqlite3
 
 # Local imports
