@@ -13,7 +13,7 @@ lint:
 		--max-module-lines=2000 \
 		--max-statements=100 \
 		--max-branches=20 \
-		--disable=R,C core/*.py tests/*.py
+		--disable=R,C core/*.py tests/core/*.py
 
 test:
 	python -m pytest core
