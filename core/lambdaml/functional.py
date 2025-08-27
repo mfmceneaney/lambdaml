@@ -9,6 +9,14 @@ def sigmoid_growth(epoch, nepochs, coefficient=0.05):
     return coefficient * (2.0 / (1.0 + np.exp(-10 * epoch / nepochs)) - 1)
 
 
+def sigmoid_decay(epoch, nepochs, coefficient=0.05):
+    return sigmoid_growth(nepochs - epoch - 1, nepochs, coefficient)
+
+
+def linear_growth(epoch, nepochs, t_min=0.07, t_max=0.5):
+    return t_min + (t_max - t_min) * (epoch / nepochs)
+
+
 def linear_decay(epoch, nepochs, t_min=0.07, t_max=0.5):
     return t_min + (t_max - t_min) * (1 - epoch / nepochs)
 

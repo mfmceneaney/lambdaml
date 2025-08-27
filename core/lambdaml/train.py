@@ -280,11 +280,15 @@ def train_titok(
                 tgt_feats,
                 tgt_logits,
                 soft_labels,
-                loss_auc_alpha=0.5,
-                loss_soft_temperature=2.0,
+                loss_auc_alpha=alpha,
+                loss_soft_temperature=temp,
                 confidence_threshold=confidence_threshold,
-                pretraining=pretraining,
+                coeff_mmd=coeff_mmd,
+                lambd=lambd,
+                coeff_auc=coeff_auc,
+                coeff_soft=coeff_soft,
                 num_classes=num_classes,
+                pretraining=pretraining,
                 device=device,
             )
 

@@ -27,6 +27,7 @@ dependencies = [
     "matplotlib",
     "plotly",
     "flask",
+    "pyyaml",
 ]
 
 [project.optional-dependencies]

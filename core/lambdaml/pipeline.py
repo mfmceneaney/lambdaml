@@ -7,7 +7,6 @@ from torch.optim.lr_scheduler import StepLR, LambdaLR
 from torch.utils.data import random_split
 import os.path as osp
 from os import makedirs
-import json
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import hipopy.hipopy as hp
@@ -42,6 +41,7 @@ from .plot import (
     get_kinematics,
     plot_kinematics,
 )
+from .util import save_json
 
 
 def pipeline_titok(
@@ -57,7 +57,7 @@ def pipeline_titok(
     batch_size=32,
     drop_last=True,
     # Model
-    device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
+    device_name="cuda" if torch.cuda.is_available() else "cpu",
     nepochs=200,
     num_classes=2,
     gnn_type="gin",
@@ -82,7 +82,6 @@ def pipeline_titok(
     coeff_soft=0.25,
     pretrain_frac=0.2,
     verbose=False,
-    return_labels=True,
     metrics_plot_path="metrics_plot.pdf",
     metrics_plot_figsize=(24, 12),
     logs_path="logs.json",
@@ -100,7 +99,6 @@ def pipeline_titok(
         "$x_{F p\\pi^{-}}$",
         "$M_{p\\pi^{-}}$ (GeV)",
     ),  # 'idxe', 'idxp', 'idxpi',
-    best_thr=0.5,
     src_kinematics_plot_path="src_kinematics_plot.pdf",
     tgt_kinematics_plot_path="tgt_kinematics_plot.pdf",
     kinematics_axs=None,
@@ -112,6 +110,9 @@ def pipeline_titok(
     # Optuna trial
     trial=None,
 ):
+
+    # Set device
+    device = torch.device(device_name)
 
     # Create output directory
     if out_dir is not None and len(out_dir) > 0:
@@ -245,34 +246,32 @@ def pipeline_titok(
     torch.save(encoder.state_dict(), osp.join(out_dir, encoder_path))
 
     # Save model parameters to json
-    with open(osp.join(out_dir, encoder_params_path), "w", encoding="utf-8") as f:
-        json.dump(
-            {
-                "gnn_type": gnn_type,
-                "in_dim_gnn": num_node_features,
-                "hdim_gnn": hdim_gnn,
-                "num_layers_gnn": num_layers_gnn,
-                "dropout_gnn": dropout_gnn,
-                "heads_gnn": heads,
-            },
-            f,
-        )
+    save_json(
+        osp.join(out_dir, encoder_params_path),
+        {
+            "gnn_type": gnn_type,
+            "in_dim_gnn": num_node_features,
+            "hdim_gnn": hdim_gnn,
+            "num_layers_gnn": num_layers_gnn,
+            "dropout_gnn": dropout_gnn,
+            "heads_gnn": heads,
+        },
+    )
 
     # Save classifier
     torch.save(clf.state_dict(), osp.join(out_dir, clf_path))
 
     # Save classifier parameters to json
-    with open(osp.join(out_dir, clf_params_path), "w", encoding="utf-8") as f:
-        json.dump(
-            {
-                "in_dim_clf": hdim_gnn * (heads if gnn_type == "gat" else 1),
-                "num_layers_clf": num_layers_clf,
-                "hdim_clf": hdim_clf,
-                "dropout_clf": dropout_clf,
-                "out_dim_clf": num_classes,
-            },
-            f,
-        )
+    save_json(
+        osp.join(out_dir, clf_params_path),
+        {
+            "in_dim_clf": hdim_gnn * (heads if gnn_type == "gat" else 1),
+            "num_layers_clf": num_layers_clf,
+            "hdim_clf": hdim_clf,
+            "dropout_clf": dropout_clf,
+            "out_dim_clf": num_classes,
+        },
+    )
 
     # Record output paths of models and parameters for trial
     if trial is not None:
@@ -293,7 +292,7 @@ def pipeline_titok(
         src_val_loader,
         tgt_val_loader,
         soft_labels,
-        return_labels=return_labels,
+        return_labels=True,
         pretraining=False,
         num_classes=num_classes,
         confidence_threshold=confidence_threshold,
@@ -313,7 +312,7 @@ def pipeline_titok(
         tgt_val_loader,
         tgt_val_loader,
         soft_labels,
-        return_labels=return_labels,
+        return_labels=True,
         pretraining=False,
         num_classes=num_classes,
         confidence_threshold=confidence_threshold,
@@ -437,29 +436,26 @@ def pipeline_titok(
 
     # Plot ROC AUC curve
     roc_info, _ = get_best_threshold(src_labels, src_probs[:, 1])
+    best_thr = roc_info["best_thr"]
     plot_roc(axs[1, 0], **roc_info)
 
     # Save and show plot
     plt.tight_layout()
     fig.savefig(osp.join(out_dir, metrics_plot_path))
 
-    # Save training logs
-    with open(osp.join(out_dir, logs_path), "w", encoding="utf-8") as f:
-        json.dump(
-            {
-                "train": train_logs,
-                "src_val": [
-                    el if type(el) != torch.Tensor else el.tolist()
-                    for el in src_val_logs
-                ],
-                "tgt_val_logs": [
-                    el if type(el) != torch.Tensor else el.tolist()
-                    for el in src_val_logs
-                ],
-            },
-            f,
-            indent=2,
-        )
+    # Save training logs to json
+    save_json(
+        osp.join(out_dir, logs_path),
+        {
+            "train": train_logs,
+            "src_val": [
+                el if type(el) != torch.Tensor else el.tolist() for el in src_val_logs
+            ],
+            "tgt_val_logs": [
+                el if type(el) != torch.Tensor else el.tolist() for el in src_val_logs
+            ],
+        },
+    )
 
     # ----- t-SNE model representation
     src_embeds, src_labels, src_domains, src_preds = collect_embeddings(

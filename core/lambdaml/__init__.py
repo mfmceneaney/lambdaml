@@ -12,4 +12,5 @@ from .pipeline import *
 from .plot import *
 from .preprocess import *
 from .train import *
+from .util import *
 from .validate import *
