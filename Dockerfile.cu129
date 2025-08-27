@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.9.0-runtime-ubuntu25.04
+FROM ubuntu:25.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV LANG=C.UTF-8
@@ -24,9 +24,7 @@ COPY . .
 
 # Install python modules
 RUN pip install --upgrade pip && \
-    if [ -f pyproject.toml && -f requirements-pyg-cu129.txt]; then \
-    pip install -e .; \
-    pip install -r requirements-pyg-cu129.txt; \
-    fi
+    if [ -f pyproject.toml ]; then pip install -e .; fi && \
+    if [ -f requirements-pyg-pt28-cu129.txt ]; then pip install -r requirements-pyg-pt28-cu129.txt; fi
 
 CMD ["/bin/bash","-c","source /usr/src/lambdaml/bin/env.sh && exec bash"]
