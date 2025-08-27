@@ -20,14 +20,14 @@ argparser = argparse.ArgumentParser()
 argparser.add_argument(
     "--config",
     type=str,
-    default="config.yaml",
+    default=None,
     help="Path to config yaml",
 )
 
 argparser.add_argument(
     "--is_tudataset",
     type=bool,
-    default=False,
+    default=True,
     help="Whether to use tudataset or not",
 )
 
@@ -45,7 +45,7 @@ argparser.add_argument(
     help="Path to output directory",
 )
 
-transforms_dict = {
+transform_choices = {
     "knn_graph1": T.KNNGraph(k=1),
     "knn_graph2": T.KNNGraph(k=2),
     "knn_graph3": T.KNNGraph(k=3),
@@ -87,7 +87,7 @@ argparser.add_argument(
 argparser.add_argument(
     "--tgt_root",
     type=str,
-    default="tgt_dataset/",
+    default=None,
     help="Path to target dataset",
 )
 
@@ -385,72 +385,26 @@ argparser.add_argument(
     help="Path for classifier params",
 )
 
-argparser.parse_arguments()
+# Parse arguments and initialize argument dictionary
+args_raw = argparser.parse_args()
+args = {}
 
+# Check if arguments have been supplied by yaml
+if args_raw.config is not None and osp.exists(args_raw.config):
+    args = load_yaml(args_raw.config)
 
-pipeline_titok(
-    is_tudataset=False,
-    use_lazy_dataset=False,
-    out_dir="",
-    transform=None,  # T.Compose([T.ToUndirected(),T.KNNGraph(k=6),T.NormalizeFeatures()]),
-    max_idx=1000,
-    ds_split=(0.8, 0.2),
-    src_root="src_dataset/",
-    tgt_root="tgt_dataset/",
-    # loader arguments
-    batch_size=32,
-    drop_last=True,
-    # Model
-    device_name=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
-    nepochs=200,
-    num_classes=2,
-    gnn_type="gin",
-    hdim_gnn=64,
-    num_layers_gnn=3,
-    dropout_gnn=0.4,
-    heads=4,
-    num_layers_clf=3,
-    hdim_clf=128,
-    dropout_clf=0.4,
-    # Learning rate arguments
-    lr=0.001,
-    lr_scheduler_type="linear",  # None/'', step, and linear
-    lr_kwargs=None,  # NOTE: default for step
-    soft_labels_temp=2,
-    confidence_threshold=0.8,
-    temp_fn=1.0,
-    alpha_fn=1.0,
-    lambda_fn=sigmoid_growth,
-    coeff_mmd=0.3,
-    coeff_auc=0.01,
-    coeff_soft=0.25,
-    pretrain_frac=0.2,
-    verbose=False,
-    metrics_plot_path="metrics_plot.pdf",
-    metrics_plot_figsize=(24, 12),
-    logs_path="logs.json",
-    tsne_plot_path="tsne_plot.pdf",
-    tsne_plot_figsize=(20, 8),
-    # Plot kinematics arguments
-    kin_indices=(i for i in range(3, 11)),
-    kin_xlabels=(
-        "$Q^2$ (GeV$^2$)",
-        "$\\nu$",
-        "$W$ (GeV)",
-        "$x$",
-        "$y$",
-        "$z_{p\\pi^{-}}$",
-        "$x_{F p\\pi^{-}}$",
-        "$M_{p\\pi^{-}}$ (GeV)",
-    ),
-    src_kinematics_plot_path="src_kinematics_plot.pdf",
-    tgt_kinematics_plot_path="tgt_kinematics_plot.pdf",
-    kinematics_axs=None,
-    # Model save arguments
-    encoder_path="encoder.pt",
-    encoder_params_path="encoder_params.json",
-    clf_path="clf.pt",
-    clf_params_path="clf_params.json",
-    # Optuna trial
-    trial=None,
-)
+# Otherwise take them from command line
+else:
+    args = vars(args_raw)
+
+# Replace values in args that are aliases for complex classes
+args["transform"] = transform_choices[args["transform"]] if args["transform"] is not None else None
+args["temp_fn"]   = fn_choices[args["temp_fn"]] if args["temp_fn"] is not None and type(args["temp_fn"])!=float else None
+args["alpha_fn"]  = fn_choices[args["alpha_fn"]] if args["alpha_fn"] is not None and type(args["alpha_fn"])!=float else None
+args["lambda_fn"] = fn_choices[args["lambda_fn"]] if args["lambda_fn"] is not None and type(args["lambda_fn"])!=float else None
+
+# Remove config argument
+args.pop("config")
+
+# Run pipeline
+pipeline_titok(**args)
