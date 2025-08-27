@@ -10,6 +10,7 @@ from os import makedirs
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import hipopy.hipopy as hp
+import numpy as np
 
 # Local imports
 from .data import (
@@ -45,20 +46,20 @@ from .util import save_json
 
 
 def pipeline_titok(
-    is_tudataset=False,
+    is_tudataset=True,
     use_lazy_dataset=False,
     out_dir="",
     transform=None,  # T.Compose([T.ToUndirected(),T.KNNGraph(k=6),T.NormalizeFeatures()]),
-    max_idx=1000,
+    max_idx=0,
     ds_split=(0.8, 0.2),
-    src_root="src_dataset/",
-    tgt_root="tgt_dataset/",
+    src_root="PROTEINS",
+    tgt_root=None,
     # loader arguments
     batch_size=32,
     drop_last=True,
     # Model
     device_name="cuda" if torch.cuda.is_available() else "cpu",
-    nepochs=200,
+    nepochs=100,
     num_classes=2,
     gnn_type="gin",
     hdim_gnn=64,
@@ -70,7 +71,7 @@ def pipeline_titok(
     dropout_clf=0.4,
     # Learning rate arguments
     lr=0.001,
-    lr_scheduler_type="linear",  # None/'', step, and linear
+    lr_scheduler_type=None,  # None/'', step, and linear
     lr_kwargs=None,  # NOTE: default for step
     soft_labels_temp=2,
     confidence_threshold=0.8,
@@ -88,17 +89,8 @@ def pipeline_titok(
     tsne_plot_path="tsne_plot.pdf",
     tsne_plot_figsize=(20, 8),
     # Plot kinematics arguments
-    kin_indices=(i for i in range(3, 11)),
-    kin_xlabels=(
-        "$Q^2$ (GeV$^2$)",
-        "$\\nu$",
-        "$W$ (GeV)",
-        "$x$",
-        "$y$",
-        "$z_{p\\pi^{-}}$",
-        "$x_{F p\\pi^{-}}$",
-        "$M_{p\\pi^{-}}$ (GeV)",
-    ),  # 'idxe', 'idxp', 'idxpi',
+    kin_indices=None,  # (i for i in range(3, 11)),
+    kin_xlabels=None,  # ("$Q^2$ (GeV$^2$)","$\\nu$","$W$ (GeV)","$x$","$y$","$z_{p\\pi^{-}}$","$x_{F p\\pi^{-}}$","$M_{p\\pi^{-}}$ (GeV)",),  # 'idxe', 'idxp', 'idxpi',
     src_kinematics_plot_path="src_kinematics_plot.pdf",
     tgt_kinematics_plot_path="tgt_kinematics_plot.pdf",
     kinematics_axs=None,
@@ -153,24 +145,64 @@ def pipeline_titok(
 
             src_ds = SmallDataset(
                 src_root, transform=transform, pre_transform=None, pre_filter=None
-            )[0:max_idx]
+            )
 
             tgt_ds = SmallDataset(
                 tgt_root, transform=transform, pre_transform=None, pre_filter=None
-            )[0:max_idx]
+            )
 
         else:
             src_ds = LazyDataset(
                 src_root, transform=transform, pre_transform=None, pre_filter=None
-            )[0:max_idx]
+            )
 
             tgt_ds = LazyDataset(
                 tgt_root, transform=transform, pre_transform=None, pre_filter=None
-            )[0:max_idx]
+            )
 
-    # Split datasets
-    src_train_ds, src_val_ds = random_split(src_ds, ds_split)
-    tgt_train_ds, tgt_val_ds = random_split(tgt_ds, ds_split)
+    # Take subset of datasets
+    if max_idx > 0:
+        src_ds = src_ds[0:max_idx]
+        tgt_ds = tgt_ds[0:max_idx]
+
+    # ----- Split datasets ----- #
+    src_train_ds, src_val_ds = None, None
+    tgt_train_ds, tgt_val_ds = None, None
+
+    # First check if you have a list of fractions, since this will not be handle automatically in torch<2.x
+    if np.isclose(np.sum(ds_split),1.0):
+
+        # Get a list of lengths for the source dataset
+        src_ds_len = len(src_ds)
+        src_ds_split = [int(src_ds_len * ds_split[i]) for i in range(len(ds_split))]
+        if np.sum(src_ds_split)!=src_ds_len:
+            diff = src_ds_len - np.sum(src_ds_split)
+            for i in range(diff):
+                idx = i % len(src_ds_split)
+                src_ds_split[idx] += 1
+
+        # And for the target dataset
+        tgt_ds_len = len(tgt_ds)
+        tgt_ds_split = [int(tgt_ds_len * ds_split[i]) for i in range(len(ds_split))]
+        if np.sum(tgt_ds_split)!=tgt_ds_len:
+            diff = tgt_ds_len - np.sum(tgt_ds_split)
+            for i in range(diff):
+                idx = i % len(tgt_ds_split)
+                tgt_ds_split[idx] += 1
+
+        # Split datasets
+        print("DEBUGGING: src_ds_len = ", src_ds_len)
+        print("DEBUGGING: src_ds_split = ", src_ds_split)
+        print("DEBUGGING: tgt_ds_len = ", tgt_ds_len)
+        print("DEBUGGING: tgt_ds_split = ", tgt_ds_split)
+        src_train_ds, src_val_ds = random_split(src_ds, src_ds_split)
+        tgt_train_ds, tgt_val_ds = random_split(tgt_ds, tgt_ds_split)
+
+    else:
+
+        # Split datasets
+        src_train_ds, src_val_ds = random_split(src_ds, ds_split)
+        tgt_train_ds, tgt_val_ds = random_split(tgt_ds, ds_split)
 
     # Create DataLoaders
     src_train_loader = DataLoader(
@@ -498,81 +530,86 @@ def pipeline_titok(
     plt.tight_layout()
     fig.savefig(osp.join(out_dir, tsne_plot_path))
 
-    # -----
+    # Check if arguments have been supplied
+    if (
+        kin_indices is not None
+        and kin_xlabels is not None
+        and len(kin_indices) == len(kin_xlabels)
+    ):
 
-    # Get kinematics for source and target domains
-    src_sg_kin, src_bg_kin = get_kinematics(
-        encoder,
-        clf,
-        src_val_loader,
-        threshold=best_thr,
-        device=device,
-        class_idx_signal=1,
-        class_idx_background=0,
-    )
-    tgt_sg_kin, tgt_bg_kin = get_kinematics(
-        encoder,
-        clf,
-        tgt_val_loader,
-        threshold=best_thr,
-        device=device,
-        class_idx_signal=1,
-        class_idx_background=0,
-    )
-
-    try:
-
-        # Plot kinematics for source and target domains
-        src_fig, _ = plot_kinematics(
-            kinematics_axs,
-            src_sg_kin,
-            src_bg_kin,
-            kin_indices=kin_indices,
-            kin_xlabels=kin_xlabels,
-            sg_hist_kwargs={
-                "bins": 50,
-                "alpha": 0.6,
-                "label": "Signal",
-                "color": "C0",
-                "density": True,
-            },
-            bg_hist_kwargs={
-                "bins": 50,
-                "alpha": 0.6,
-                "label": "Background",
-                "color": "C1",
-                "density": True,
-            },
+        # Get kinematics for source and target domains
+        src_sg_kin, src_bg_kin = get_kinematics(
+            encoder,
+            clf,
+            src_val_loader,
+            threshold=best_thr,
+            device=device,
+            class_idx_signal=1,
+            class_idx_background=0,
         )
-        tgt_fig, _ = plot_kinematics(
-            kinematics_axs,
-            tgt_sg_kin,
-            tgt_bg_kin,
-            kin_indices=kin_indices,
-            kin_xlabels=kin_xlabels,
-            sg_hist_kwargs={
-                "bins": 50,
-                "alpha": 0.6,
-                "label": "Signal",
-                "color": "C0",
-                "density": True,
-            },
-            bg_hist_kwargs={
-                "bins": 50,
-                "alpha": 0.6,
-                "label": "Background",
-                "color": "C1",
-                "density": True,
-            },
+        tgt_sg_kin, tgt_bg_kin = get_kinematics(
+            encoder,
+            clf,
+            tgt_val_loader,
+            threshold=best_thr,
+            device=device,
+            class_idx_signal=1,
+            class_idx_background=0,
         )
 
-        # Save and plot kinematics figures
-        plt.tight_layout()
-        src_fig.savefig(osp.join(out_dir, src_kinematics_plot_path))
-        tgt_fig.savefig(osp.join(out_dir, tgt_kinematics_plot_path))
+        try:
 
-    except ValueError:
-        pass
+            # Plot kinematics for source and target domains
+            src_fig, _ = plot_kinematics(
+                kinematics_axs,
+                src_sg_kin,
+                src_bg_kin,
+                kin_indices=kin_indices,
+                kin_xlabels=kin_xlabels,
+                sg_hist_kwargs={
+                    "bins": 50,
+                    "alpha": 0.6,
+                    "label": "Signal",
+                    "color": "C0",
+                    "density": True,
+                },
+                bg_hist_kwargs={
+                    "bins": 50,
+                    "alpha": 0.6,
+                    "label": "Background",
+                    "color": "C1",
+                    "density": True,
+                },
+            )
+            tgt_fig, _ = plot_kinematics(
+                kinematics_axs,
+                tgt_sg_kin,
+                tgt_bg_kin,
+                kin_indices=kin_indices,
+                kin_xlabels=kin_xlabels,
+                sg_hist_kwargs={
+                    "bins": 50,
+                    "alpha": 0.6,
+                    "label": "Signal",
+                    "color": "C0",
+                    "density": True,
+                },
+                bg_hist_kwargs={
+                    "bins": 50,
+                    "alpha": 0.6,
+                    "label": "Background",
+                    "color": "C1",
+                    "density": True,
+                },
+            )
+
+            # Save and plot kinematics figures
+            plt.tight_layout()
+            src_fig.savefig(osp.join(out_dir, src_kinematics_plot_path))
+            tgt_fig.savefig(osp.join(out_dir, tgt_kinematics_plot_path))
+
+        except ValueError:
+            pass
 
     # Set output paths
     paths = [
