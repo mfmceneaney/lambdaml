@@ -111,6 +111,10 @@ def pipeline_titok(
     trial=None,
 ):
 
+    # Check arguments
+    if lr_kwargs is None:
+        lr_kwargs = {}
+
     # Set device
     device = torch.device(device_name)
 
