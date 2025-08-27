@@ -24,7 +24,7 @@ COPY . .
 
 # Install python modules
 RUN pip install --upgrade pip && \
-    if [ -f pyproject.toml ]; then pip install -e .; fi && \
-    if [ -f requirements-pyg-pt28-cpu.txt ]; then pip install -r requirements-pyg-pt28-cpu.txt; fi
+    pip install -e . && \
+    pip install -r requirements-pyg-pt28-cpu.txt
 
 CMD ["/bin/bash","-c","source /usr/src/lambdaml/bin/env.sh && exec bash"]
