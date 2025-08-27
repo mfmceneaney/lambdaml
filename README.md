@@ -3,19 +3,13 @@
 This is a project to train Graph Neural Networks (GNNs) for $\Lambda$ hyperon event identification at [CLAS12](https://www.jlab.org/physics/hall-b/clas12).
 [Domain Adversarial](https://arxiv.org/abs/1505.07818), [Contrastive Adaptation](http://arxiv.org/abs/1901.00976), and [TIToK](https://www.sciencedirect.com/science/article/pii/S0893608023002137) approaches are implemented for adapting models to target data domains.
 
-## Prerequisites
+## :green_circle: Installation
 
-* python>=3.9
+You can use either a container image via [Docker](https://www.docker.com) or install manually assuming you have python installed.
 
-## Installation
+### Installation Via Docker
 
-You can use either a container image via Docker or install manually assuming you have all the prerequisites.
-
-## Installation Via Docker
-
-You may also install and run the project as a [Docker](https://www.docker.com) container.
-
-Begin as above by cloning the repository:
+Begin by cloning the repository:
 ```bash
 git clone https://github.com/mfmceneaney/lambdaml.git
 ```
@@ -33,6 +27,14 @@ To retain the container data though, you can mount a local directory (`src`) to 
 inside the container with the following:
 ```bash
 docker run --rm -it -v <src>:<dst> lambdaml-project
+```
+To link all available GPUs on your node, e.g., in a SLURM job use the `--gpus all` option.
+```bash
+docker run --rm -it --gpus all lambdaml-project
+```
+If you really only need to run a single python script in the container and then exit, for example, for a SLURM job, you can do that too.
+```bash
+docker run --rm lambdaml-project python3 </path/to/my/python/sript.py>
 ```
 Once you start the container you should have the following environment variables:
 - `LAMBDAML_HOME`
@@ -55,14 +57,13 @@ Install the python modules.  These are listed in [pyproject.toml](pyproject.toml
 pip install -e .
 ```
 
-Add the following to your startup script
+Install the extra PyTorch-Geometric extensions needed for some of the GNN models.
 ```bash
-cd /path/to/lambdaml
-source $PWD/bin/env.sh # csh version also available
-cd
+pip install -r requirements-pyg-cpu.txt # Adjust pytorch and cuda version as needed.
 ```
 
-### Installing PyTorch-Geometric
+<details>
+<summary>:x: Installing PyTorch-Geometric on an HPC cluster</summary>
 
 Follow the installation instructions on the [PyTorch Geometric Documentation](https://pytorch-geometric.readthedocs.io/en/latest/notes/installation.html).
 
@@ -79,9 +80,20 @@ In your virtual environment you can now install from the local path:
 ```
 pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f /path/to/distribution/you/just/uploaded
 ```
+</details>
 
-## Getting Started
+Add the following to your startup script
+```bash
+cd /path/to/lambdaml
+source $PWD/bin/env.sh # csh version also available
+cd
+```
+
+## :green_circle: Getting Started
 Run the project pipelines for dataset creation, hyperparameter optimization, model selection, and model deployment in [pyscripts](pyscripts/).
+```bash
+python3 pyscripts/<some_script.py>
+```
 
 #
 
