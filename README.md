@@ -16,7 +16,7 @@ git clone https://github.com/mfmceneaney/lambdaml.git
 
 Then build the project with:
 ```bash
-docker build -t lambdaml-project /path/to/lambdaml
+docker build -f /path/to/lambdaml/Dockerfile.cpu -t lambdaml-project /path/to/lambdaml #Note: There is also a cuda Dockerfile.
 ```
 and run it with:
 ```bash
