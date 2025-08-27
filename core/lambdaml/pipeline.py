@@ -165,44 +165,9 @@ def pipeline_titok(
         src_ds = src_ds[0:max_idx]
         tgt_ds = tgt_ds[0:max_idx]
 
-    # ----- Split datasets ----- #
-    src_train_ds, src_val_ds = None, None
-    tgt_train_ds, tgt_val_ds = None, None
-
-    # First check if you have a list of fractions, since this will not be handle automatically in torch<2.x
-    if np.isclose(np.sum(ds_split),1.0):
-
-        # Get a list of lengths for the source dataset
-        src_ds_len = len(src_ds)
-        src_ds_split = [int(src_ds_len * ds_split[i]) for i in range(len(ds_split))]
-        if np.sum(src_ds_split)!=src_ds_len:
-            diff = src_ds_len - np.sum(src_ds_split)
-            for i in range(diff):
-                idx = i % len(src_ds_split)
-                src_ds_split[idx] += 1
-
-        # And for the target dataset
-        tgt_ds_len = len(tgt_ds)
-        tgt_ds_split = [int(tgt_ds_len * ds_split[i]) for i in range(len(ds_split))]
-        if np.sum(tgt_ds_split)!=tgt_ds_len:
-            diff = tgt_ds_len - np.sum(tgt_ds_split)
-            for i in range(diff):
-                idx = i % len(tgt_ds_split)
-                tgt_ds_split[idx] += 1
-
-        # Split datasets
-        print("DEBUGGING: src_ds_len = ", src_ds_len)
-        print("DEBUGGING: src_ds_split = ", src_ds_split)
-        print("DEBUGGING: tgt_ds_len = ", tgt_ds_len)
-        print("DEBUGGING: tgt_ds_split = ", tgt_ds_split)
-        src_train_ds, src_val_ds = random_split(src_ds, src_ds_split)
-        tgt_train_ds, tgt_val_ds = random_split(tgt_ds, tgt_ds_split)
-
-    else:
-
-        # Split datasets
-        src_train_ds, src_val_ds = random_split(src_ds, ds_split)
-        tgt_train_ds, tgt_val_ds = random_split(tgt_ds, ds_split)
+    # Split datasets
+    src_train_ds, src_val_ds = random_split(src_ds, ds_split)
+    tgt_train_ds, tgt_val_ds = random_split(tgt_ds, ds_split)
 
     # Create DataLoaders
     src_train_loader = DataLoader(
