@@ -1,5 +1,6 @@
 import yaml
 import json
+import argparse
 
 
 def save_yaml(path, data):
@@ -81,3 +82,18 @@ def load_json(path):
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
     return data
+
+import argparse
+
+
+def float_or_choice(value, choices = ['auto', 'default', 'none']):
+    try:
+        # Try converting to float
+        return float(value)
+    except ValueError:
+        # If not a float, check if it's an allowed string
+        if value.lower() in choices:
+            return value.lower()
+        raise argparse.ArgumentTypeError(
+            f"Value must be a float or one of: {', '.join(choices)}"
+        )
