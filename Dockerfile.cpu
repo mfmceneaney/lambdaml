@@ -1,4 +1,4 @@
-FROM ubuntu:25.04
+FROM python:3.13-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV LANG=C.UTF-8
@@ -7,13 +7,17 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 # Install build tools, venv support
 RUN apt-get update && \
-    apt-get install -y \
+    apt-get install -y --no-install-recommends \
         bash \
         git \
-        python3-venv \
-        python3-pip \
+        build-essential \
+        cmake \
         texlive-latex-base \
-    && apt-get clean && \
+        texlive-latex-recommended \
+        texlive-latex-extra \
+        texlive-fonts-recommended \
+        cm-super && \
+    apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 # Create Python virtual environment with system Python
@@ -25,7 +29,9 @@ COPY . .
 
 # Install python modules
 RUN pip install --upgrade pip && \
+    pip install torch==2.8.0+cpu --index-url https://download.pytorch.org/whl/cpu && \
     pip install -e . && \
-    pip install -r requirements-pyg-pt28-cpu.txt
+    pip install -r requirements-pyg-pt28-cpu.txt && \
+    pip cache purge
 
 CMD ["/bin/bash","-c","source /usr/src/lambdaml/bin/env.sh && exec bash"]
