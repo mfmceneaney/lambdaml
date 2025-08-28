@@ -14,6 +14,7 @@ from lambdaml.functional import (
     linear_decay,
     linear_growth,
 )
+from lambdaml.util import float_or_choice
 
 argparser = argparse.ArgumentParser()
 
@@ -228,26 +229,44 @@ fn_choices = {
 
 argparser.add_argument(
     "--temp_fn",
-    type=float,
+    type=lambda value: float_or_choice(value,choices=["sigmoid_growth", "sigmoid_decay", "linear_growth", "linear_decay"]),
     default=1.0,
-    choices=[None, "sigmoid_growth", "sigmoid_decay", "linear_growth", "linear_decay"],
     help="Temperature function",
 )
 
 argparser.add_argument(
+     "--temp_fn_kwargs",
+    type=json.loads,
+    default=None,
+    help="Temperature function kwargs dictionary in JSON format, e.g., '{\"a\": 1, \"b\": 2}'"
+)
+
+argparser.add_argument(
     "--alpha_fn",
-    type=None,
+    type=lambda value: float_or_choice(value,choices=["sigmoid_growth", "sigmoid_decay", "linear_growth", "linear_decay"]),
     default=1.0,
-    choices=[None, "sigmoid_growth", "sigmoid_decay", "linear_growth", "linear_decay"],
     help="Alpha function",
 )
 
 argparser.add_argument(
+     "--alpha_fn_kwargs",
+    type=json.loads,
+    default=None,
+    help="Alpha function kwargs dictionary in JSON format, e.g., '{\"a\": 1, \"b\": 2}'"
+)
+
+argparser.add_argument(
     "--lambda_fn",
-    type=None,
+    type=lambda value: float_or_choice(value,choices=["sigmoid_growth", "sigmoid_decay", "linear_growth", "linear_decay"]),,
     default="sigmoid_growth",
-    choices=[None, "sigmoid_growth", "sigmoid_decay", "linear_growth", "linear_decay"],
     help="Lambda function",
+)
+
+argparser.add_argument(
+     "--lambda_fn_kwargs",
+    type=json.loads,
+    default=None,
+    help="Lambda function kwargs dictionary in JSON format, e.g., '{\"a\": 1, \"b\": 2}'"
 )
 
 argparser.add_argument(
@@ -399,9 +418,17 @@ else:
 
 # Replace values in args that are aliases for complex classes
 args["transform"] = transform_choices[args["transform"]] if args["transform"] is not None else None
-args["temp_fn"]   = fn_choices[args["temp_fn"]] if args["temp_fn"] is not None and type(args["temp_fn"])!=float else None
-args["alpha_fn"]  = fn_choices[args["alpha_fn"]] if args["alpha_fn"] is not None and type(args["alpha_fn"])!=float else None
-args["lambda_fn"] = fn_choices[args["lambda_fn"]] if args["lambda_fn"] is not None and type(args["lambda_fn"])!=float else None
+
+# Loop names of functional arguments and check if a function was actually passed
+fn_names = ("temp_fn", "alpha_fn", "lambda_fn")
+for fn_name in fn_names:
+    if args[fn_name] is not None and args[fn_name] in fn_choices and callable(fn_choices[args[fn_name]]):
+
+        # Check if any kwargs are given
+        if args[fn_name+"_kwargs"] is not None:
+            args[fn_name] = lambda *args: fn_choices[args[fn_name]](*args, **args[fn_name+"_kwargs"])
+        else:
+            args[fn_name] = fn_choices[args[fn_name]]
 
 # Remove config argument
 args.pop("config")
