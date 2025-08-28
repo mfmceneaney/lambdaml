@@ -14,11 +14,11 @@ Begin by cloning the repository:
 git clone https://github.com/mfmceneaney/lambdaml.git
 ```
 
-Then build the project with:
+Then, build the project (this may take a while).
 ```bash
 docker build -f /path/to/lambdaml/Dockerfile.cpu -t lambdaml-project /path/to/lambdaml #Note: There is also a cuda Dockerfile.
 ```
-and run it with:
+After successfully building, run the project with:
 ```bash
 docker run --rm -it lambdaml-project
 ```
@@ -59,7 +59,7 @@ pip install -e .
 
 Install the extra PyTorch-Geometric extensions needed for some of the GNN models.
 ```bash
-pip install -r requirements-pyg-cpu.txt # Adjust pytorch and cuda version as needed.
+pip install -r requirements-pyg-pt28-cpu.txt # Adjust pytorch and cuda version as needed.
 ```
 
 <details>
