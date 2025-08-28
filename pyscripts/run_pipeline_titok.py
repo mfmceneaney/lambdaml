@@ -430,6 +430,9 @@ for fn_name in fn_names:
         else:
             args[fn_name] = fn_choices[args[fn_name]]
 
+    # Remove kwargs argument
+    args.pop(fn_name+"_kwargs")
+
 # Remove config argument
 args.pop("config")
 
