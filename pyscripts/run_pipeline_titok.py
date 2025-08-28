@@ -16,7 +16,7 @@ from lambdaml.functional import (
 )
 from lambdaml.util import float_or_choice
 
-argparser = argparse.ArgumentParser()
+argparser = argparse.ArgumentParser(description="Run TIToK training pipeline")
 
 argparser.add_argument(
     "--config",
