@@ -43,6 +43,11 @@ from .plot import (
     plot_kinematics,
 )
 from .util import save_json
+from .log import setup_logger
+
+
+# Set module logger
+logger = setup_logger(__name__)
 
 
 def pipeline_titok(
@@ -108,19 +113,24 @@ def pipeline_titok(
         lr_kwargs = {}
 
     # Set device
+    logger.info("Using device: %s", device_name)
     device = torch.device(device_name)
 
     # Create output directory
     if out_dir is not None and len(out_dir) > 0:
         makedirs(out_dir, exist_ok=True)
 
+    # Expand paths
+    src_root_exp = osp.expanduser(src_root) if src_root is not None else None
+    tgt_root_exp = osp.expanduser(tgt_root) if tgt_root is not None else None
+
     # Load TUDataset or custom dataset
     src_ds, tgt_ds = None, None
-    if is_tudataset:
+    if is_tudataset and src_root is not None:
 
         # Shuffle and split into two subsets
         if src_root == tgt_root or tgt_root is None or len(tgt_root) == 0:
-            src_root_exp = osp.expanduser(src_root)
+            logger.info("Loading full TUDataset: %s", src_root_exp)
             full_ds = TUDataset(
                 root=osp.dirname(src_root_exp), name=osp.basename(src_root_exp)
             )
@@ -130,34 +140,35 @@ def pipeline_titok(
 
         # Or load two datasets
         else:
-            src_root_exp = osp.expanduser(src_root)
-            tgt_root_exp = osp.expanduser(tgt_root)
+            logger.info("Loading source TUDataset: %s", src_root_exp)
             src_ds = TUDataset(
                 root=osp.dirname(src_root_exp), name=osp.basename(src_root_exp)
             )
+            logger.info("Loading target TUDataset: %s", tgt_root_exp)
             tgt_ds = TUDataset(
                 root=osp.dirname(tgt_root_exp), name=osp.basename(tgt_root_exp)
             )
 
     # Load a custom pyg dataset
-    else:
+    elif src_root is not None and tgt_root is not None:
         if not use_lazy_dataset:
-
+            logger.info("Loading source SmallDataset: %s", src_root_exp)
             src_ds = SmallDataset(
-                src_root, transform=transform, pre_transform=None, pre_filter=None
+                src_root_exp, transform=transform, pre_transform=None, pre_filter=None
             )
-
+            logger.info("Loading target SmallDataset: %s", src_root_exp)
             tgt_ds = SmallDataset(
-                tgt_root, transform=transform, pre_transform=None, pre_filter=None
+                tgt_root_exp, transform=transform, pre_transform=None, pre_filter=None
             )
 
         else:
+            logger.info("Loading source LazyDataset: %s", src_root_exp)
             src_ds = LazyDataset(
-                src_root, transform=transform, pre_transform=None, pre_filter=None
+                src_root_exp, transform=transform, pre_transform=None, pre_filter=None
             )
-
+            logger.info("Loading target LazyDataset: %s", src_root_exp)
             tgt_ds = LazyDataset(
-                tgt_root, transform=transform, pre_transform=None, pre_filter=None
+                tgt_root_exp, transform=transform, pre_transform=None, pre_filter=None
             )
 
     # Take subset of datasets
@@ -170,23 +181,28 @@ def pipeline_titok(
     tgt_train_ds, tgt_val_ds = random_split(tgt_ds, ds_split)
 
     # Create DataLoaders
+    logger.info("Creating source training DataLoader")
     src_train_loader = DataLoader(
         src_train_ds, batch_size=batch_size, shuffle=True, drop_last=drop_last
     )
+    logger.info("Creating target training DataLoader")
     tgt_train_loader = DataLoader(
         tgt_train_ds, batch_size=batch_size, shuffle=True, drop_last=drop_last
     )
 
     # Create DataLoaders
+    logger.info("Creating source validation DataLoader")
     src_val_loader = DataLoader(
         src_val_ds, batch_size=batch_size, shuffle=False, drop_last=drop_last
     )
+    logger.info("Creating target validation DataLoader")
     tgt_val_loader = DataLoader(
         tgt_val_ds, batch_size=batch_size, shuffle=False, drop_last=drop_last
     )
 
     # --------------------------------------------------------#
     # Create model
+    logger.info("Creating GNN Model")
 
     num_node_features = src_ds[0].num_node_features
 
@@ -242,11 +258,15 @@ def pipeline_titok(
         device=device,
         verbose=verbose,
     )
+    logger.debug("train_logs = %s",train_logs)
+    logger.info("soft_labels = %s",soft_labels)
 
     # Save model
+    logger.info("Saving GNN Encoder")
     torch.save(encoder.state_dict(), osp.join(out_dir, encoder_path))
 
     # Save model parameters to json
+    logger.info("Saving GNN Encoder Parameters")
     save_json(
         osp.join(out_dir, encoder_params_path),
         {
@@ -260,9 +280,11 @@ def pipeline_titok(
     )
 
     # Save classifier
+    logger.info("Saving Classifier")
     torch.save(clf.state_dict(), osp.join(out_dir, clf_path))
 
     # Save classifier parameters to json
+    logger.info("Saving Classifier Parameters")
     save_json(
         osp.join(out_dir, clf_params_path),
         {
@@ -276,6 +298,7 @@ def pipeline_titok(
 
     # Record output paths of models and parameters for trial
     if trial is not None:
+        logger.info("Setting optuna trial attributes")
         trial.set_user_attr("encoder_path", encoder_path)
         trial.set_user_attr("encoder_params_path", encoder_params_path)
         trial.set_user_attr("clf_path", clf_path)
@@ -285,7 +308,7 @@ def pipeline_titok(
     temp = temp_fn if not callable(temp_fn) else temp_fn(nepochs, nepochs)
     alpha = alpha_fn if not callable(alpha_fn) else alpha_fn(nepochs, nepochs)
     lambd = lambda_fn if not callable(lambda_fn) else lambda_fn(nepochs, nepochs)
-    soft_labels = None
+    logger.info("Validating model on source validation dataset")
     src_val_logs = val_titok(
         encoder,
         clf,
@@ -305,7 +328,7 @@ def pipeline_titok(
         coeff_soft=coeff_soft,
         device=device,
     )
-
+    logger.info("Validating model on target validation dataset")
     tgt_val_logs = val_titok(
         encoder,
         clf,
@@ -324,6 +347,21 @@ def pipeline_titok(
         coeff_auc=coeff_auc,
         coeff_soft=coeff_soft,
         device=device,
+    )
+
+    # Save training logs to json
+    logger.info("Saving training logs")
+    save_json(
+        osp.join(out_dir, logs_path),
+        {
+            "train": train_logs,
+            "src_val": [
+                el if type(el) != torch.Tensor else el.tolist() for el in src_val_logs
+            ],
+            "tgt_val_logs": [
+                el if type(el) != torch.Tensor else el.tolist() for el in src_val_logs
+            ],
+        },
     )
 
     # Pop src validation log values
@@ -348,6 +386,7 @@ def pipeline_titok(
     ]
     loss_coeffs = [alpha_values, lambda_values]
     loss_coeffs_kwargs = [{"label": "alpha"}, {"label": "lambda"}]
+    logger.info("Plotting loss coefficients")
     plot_epoch_metrics(
         axs[0, 1],
         nepochs,
@@ -366,6 +405,7 @@ def pipeline_titok(
     # Plot learning rate
     lrs = [train_logs["lrs"]]
     lrs_kwargs = [{"label": "lr"}]
+    logger.info("Plotting learning rates")
     plot_epoch_metrics(
         axs[1, 1],
         nepochs,
@@ -390,6 +430,7 @@ def pipeline_titok(
         {"label": key, "linestyle": ":"} for key in train_logs if "val_loss" in key
     ]
     losses_kwargs = [*train_losses_kwargs, *val_losses_kwargs]
+    logger.info("Plotting losses")
     plot_epoch_metrics(
         axs[0, 2],
         nepochs,
@@ -417,6 +458,7 @@ def pipeline_titok(
         {"label": key, "linestyle": ":"} for key in train_logs if "val_acc" in key
     ]
     accs_kwargs = [*train_accs_kwargs, *val_accs_kwargs]
+    logger.info("Plotting accuracies")
     plot_epoch_metrics(
         axs[1, 2],
         nepochs,
@@ -433,32 +475,23 @@ def pipeline_titok(
     )
 
     # Plot domain predictions
+    logger.info("Plotting domain predictions")
     plot_domain_preds(axs[0, 0], src_probs[:, 1], tgt_probs[:, 1])
 
     # Plot ROC AUC curve
     roc_info, _ = get_best_threshold(src_labels, src_probs[:, 1])
     best_thr = roc_info["best_thr"]
+    logger.info("Plotting ROC curve")
     plot_roc(axs[1, 0], **roc_info)
 
     # Save and show plot
+    logger.info("Saving training metrics figure")
+    plt.show()
     plt.tight_layout()
-    fig.savefig(osp.join(out_dir, metrics_plot_path))
-
-    # Save training logs to json
-    save_json(
-        osp.join(out_dir, logs_path),
-        {
-            "train": train_logs,
-            "src_val": [
-                el if type(el) != torch.Tensor else el.tolist() for el in src_val_logs
-            ],
-            "tgt_val_logs": [
-                el if type(el) != torch.Tensor else el.tolist() for el in src_val_logs
-            ],
-        },
-    )
+    fig.savefig(osp.join(out_dir, metrics_plot_path), bbox_inches='tight')
 
     # ----- t-SNE model representation
+    logger.info("Collecting embeddings")
     src_embeds, src_labels, src_domains, src_preds = collect_embeddings(
         encoder, clf, src_val_loader, device, domain_label=0
     )
@@ -473,6 +506,7 @@ def pipeline_titok(
     labels_and_preds = torch.cat([src_labels, tgt_preds], dim=0)
 
     # Create figure
+    logger.info("Plotting t-SNE representations")
     fig, axs = plt.subplots(1, 2, figsize=tsne_plot_figsize)
 
     # Plot
@@ -492,6 +526,7 @@ def pipeline_titok(
     )
 
     # Save and show t-SNE fig
+    logger.info("Saving t-SNE representation figure")
     plt.tight_layout()
     fig.savefig(osp.join(out_dir, tsne_plot_path))
 
@@ -503,6 +538,7 @@ def pipeline_titok(
     ):
 
         # Get kinematics for source and target domains
+        logger.info("Collecting kinematics arrays")
         src_sg_kin, src_bg_kin = get_kinematics(
             encoder,
             clf,
@@ -525,6 +561,7 @@ def pipeline_titok(
         try:
 
             # Plot kinematics for source and target domains
+            logger.info("Plotting kinematics distributions")
             src_fig, _ = plot_kinematics(
                 kinematics_axs,
                 src_sg_kin,
@@ -569,6 +606,7 @@ def pipeline_titok(
             )
 
             # Save and plot kinematics figures
+            logger.info("Saving kinematics figure")
             plt.tight_layout()
             src_fig.savefig(osp.join(out_dir, src_kinematics_plot_path))
             tgt_fig.savefig(osp.join(out_dir, tgt_kinematics_plot_path))
@@ -622,6 +660,9 @@ def pipeline_preprocessing(
     datalist = []
 
     # Iterate hipo files
+    logger.info("Looping input hipo files")
+    logger.debug("file_list = %s",file_list)
+    logger.debug("banks = %s",banks)
     for batch in tqdm.tqdm(hp.iterate(file_list, banks=banks, step=step)):
 
         # Set bank names and entry names to look at
@@ -661,6 +702,11 @@ def pipeline_preprocessing(
             datalist.append(data)
 
     # Create (or add to) a PyG Dataset
+    logger.info("Adding data to LazyDataset")
+    logger.debug("out_dataset_path = %s", out_dataset_path)
+    logger.debug("len(datalist) = %s", len(datalist))
+    logger.debug("lazy_ds_batch_size = %s", lazy_ds_batch_size)
+    logger.debug("num_workers = %s", num_workers)
     LazyDataset(
         out_dataset_path,
         transform=None,

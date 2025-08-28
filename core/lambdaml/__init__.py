@@ -6,6 +6,7 @@ __version__ = "0.0.0"
 
 from .data import *
 from .deploy import *
+from .log import *
 from .models import *
 from .optimize import *
 from .pipeline import *

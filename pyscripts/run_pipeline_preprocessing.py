@@ -8,6 +8,7 @@ from lambdaml.preprocessing import (
     get_kinematics_rec_particle,
 )
 from lambdaml.pipeline import pipeline_preprocessing
+from lambdaml.log import set_global_log_level
 
 
 # Create argument parser
@@ -21,6 +22,14 @@ fn_choices = {
 }
 
 # Add arguments
+argparser.add_argument(
+    "--log_level",
+    type=str,
+    default="INFO",
+    choices=["debug", "info", "warning", "error", "critical", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+    help="Log level",
+)
+
 argparser.add_argument(
     "--config",
     type=str,
@@ -130,6 +139,10 @@ if args_raw.config is not None and osp.exists(args_raw.config):
 # Otherwise take them from command line
 else:
     args = vars(args_raw)
+
+# Set log level
+set_global_log_level(args["log_level"])
+args.pop("log_level")
 
 # Loop names of functional arguments and check if a function was actually passed
 fn_names = ("preprocessing_fn", "labelling_fn", "kinematics_fn")

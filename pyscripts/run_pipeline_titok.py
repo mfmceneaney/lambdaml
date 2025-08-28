@@ -15,8 +15,18 @@ from lambdaml.functional import (
     linear_growth,
 )
 from lambdaml.util import float_or_choice
+from lambdaml.log import set_global_log_level
+
 
 argparser = argparse.ArgumentParser(description="Run TIToK training pipeline")
+
+argparser.add_argument(
+    "--log_level",
+    type=str,
+    default="INFO",
+    choices=["debug", "info", "warning", "error", "critical", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+    help="Log level",
+)
 
 argparser.add_argument(
     "--config",
@@ -341,24 +351,15 @@ argparser.add_argument(
 
 argparser.add_argument(
     "--kin_indices",
-    type=tuple,
-    default=(i for i in range(3, 11)),
+    type=list,
+    default=None,
     help="Kinematic indices",
 )
 
 argparser.add_argument(
     "--kin_xlabels",
-    type=tuple,
-    default=(
-        "$Q^2$ (GeV$^2$)",
-        "$\\nu$",
-        "$W$ (GeV)",
-        "$x$",
-        "$y$",
-        "$z_{p\\pi^{-}}$",
-        "$x_{F p\\pi^{-}}$",
-        "$M_{p\\pi^{-}}$ (GeV)",
-    ),
+    type=list,
+    default=None,
     help="Kinematic xlabels",
 )
 
@@ -415,6 +416,10 @@ if args_raw.config is not None and osp.exists(args_raw.config):
 # Otherwise take them from command line
 else:
     args = vars(args_raw)
+
+# Set log level
+set_global_log_level(args["log_level"])
+args.pop("log_level")
 
 # Replace values in args that are aliases for complex classes
 args["transform"] = transform_choices[args["transform"]] if args["transform"] is not None else None

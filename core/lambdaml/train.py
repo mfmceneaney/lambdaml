@@ -5,6 +5,11 @@ from tqdm import tqdm
 # Local imports
 from .functional import sigmoid_growth, gen_soft_labels, loss_titok
 from .validate import val_titok
+from .log import setup_logger
+
+
+# Set module logger
+logger = setup_logger(__name__)
 
 
 # def train(epochs=100, alpha_fn=0.1):
@@ -225,6 +230,8 @@ def train_titok(
     # Loop training epochs
     for epoch in tqdm(range(1, nepochs + 1)):
 
+        logger.debug("Epoch:",epoch)
+
         # Check alpha function
         if callable(alpha_fn):
             alpha = alpha_fn(epoch, nepochs)
@@ -254,6 +261,8 @@ def train_titok(
                 temperature=soft_labels_temp,
                 device=device,
             )
+            logger.info("soft_labels = %s",soft_labels)
+            logger.info("type(soft_labels) = %s",type(soft_labels))
 
         # Iterate over source and target loaders in parallel
         for src_batch, tgt_batch in zip(src_train_loader, tgt_train_loader):
