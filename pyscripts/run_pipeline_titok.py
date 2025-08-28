@@ -42,7 +42,7 @@ argparser.add_argument(
 argparser.add_argument(
     "--out_dir",
     type=str,
-    default="",
+    default="experiments/",
     help="Path to output directory",
 )
 
