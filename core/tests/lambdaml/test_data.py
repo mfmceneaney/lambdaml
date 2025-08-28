@@ -1,4 +1,3 @@
-# ----------------------------------------------------------------------------------------------------#
 # DATA
 from torch_geometric.data import Data, Dataset, InMemoryDataset, download_url
 import os.path as osp

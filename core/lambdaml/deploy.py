@@ -9,6 +9,11 @@ import os.path as osp
 
 # Local imports
 from .models import FlexibleGNNEncoder, GraphClassifier
+from .log import setup_logger
+
+
+# Set module logger
+logger = setup_logger(__name__)
 
 
 class TITOKModelWrapper:

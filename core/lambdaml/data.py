@@ -1,5 +1,6 @@
 # DATA
 # pylint: disable=no-member
+# pylint: disable=abstract-method
 import torch
 from torch_geometric.data import Data, Dataset, InMemoryDataset
 import os
@@ -8,6 +9,13 @@ import multiprocessing
 from tqdm import tqdm
 from functools import lru_cache
 import json
+
+# Local imports
+from .log import setup_logger
+
+
+# Set module logger
+logger = setup_logger(__name__)
 
 
 # Class definitions

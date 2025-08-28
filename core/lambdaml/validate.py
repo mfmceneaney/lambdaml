@@ -7,6 +7,11 @@ from sklearn.metrics import roc_curve, auc
 
 # Local imports
 from .functional import loss_titok
+from .log import setup_logger
+
+
+# Set module logger
+logger = setup_logger(__name__)
 
 
 def val_titok(
@@ -55,6 +60,7 @@ def val_titok(
             optimizer.zero_grad()
 
             # Source graph forward pass
+            logger.debug("src_batch = %s", src_batch)
             src_batch = src_batch.to(device)
             src_feats = encoder(src_batch.x, src_batch.edge_index, src_batch.batch)
             src_logits = clf(src_feats)
@@ -63,6 +69,7 @@ def val_titok(
             src_labels = src_batch.y
 
             # Target graph forward pass
+            logger.debug("tgt_batch = %s", tgt_batch)
             tgt_batch = tgt_batch.to(device)
             tgt_feats = encoder(tgt_batch.x, tgt_batch.edge_index, tgt_batch.batch)
             tgt_logits = clf(tgt_feats)
@@ -86,6 +93,7 @@ def val_titok(
                 pretraining=pretraining,
                 device=device,
             )
+            logger.debug("loss_titok = %s", loss)
 
             # Pop losses
             total_loss += loss.item()
@@ -215,7 +223,11 @@ def val_titok(
 def get_best_threshold(labels, probs):
 
     # Compute ROC curve and AUC
+    logger.debug("labels = %s", labels)
+    logger.debug("probs = %s", probs)
     fpr, tpr, thresholds = roc_curve(labels, probs)
+    logger.debug("fpr = %s", fpr)
+    logger.debug("tpr = %s", tpr)
     roc_auc = auc(fpr, tpr)
 
     # Compute Figure of Merit: FOM = TPR / sqrt(TPR + FPR)

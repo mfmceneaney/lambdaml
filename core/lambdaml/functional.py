@@ -4,6 +4,13 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+# Local imports
+from .log import setup_logger
+
+
+# Set module logger
+logger = setup_logger(__name__)
+
 
 def sigmoid_growth(epoch, nepochs, coefficient=0.05):
     return coefficient * (2.0 / (1.0 + np.exp(-10 * epoch / nepochs)) - 1)

@@ -1,4 +1,3 @@
-# ----------------------------------------------------------------------------------------------------#
 # OPTIMIZE
 import optuna
 from optuna.integration.wandb import WeightsAndBiasesCallback

@@ -5,6 +5,13 @@ import awkward as ak
 import torch
 from particle import PDGID
 
+# Local imports
+from .log import setup_logger
+
+
+# Set module logger
+logger = setup_logger(__name__)
+
 
 def get_bank_keys(bank_name, all_keys, separator="_"):
     """
@@ -391,7 +398,7 @@ def replace_pids(arr, pid_map, pid_i=0):
     """
 
     if "int" in str(arr.dtype):
-        print(" *** ERROR *** array passed to replace_pids should not have dtype==int")
+        logger.error("arr should not have dtype==int")
         return
 
     for key in pid_map:
@@ -418,6 +425,10 @@ def preprocess_rec_particle(
 
     :return: new_x
     """
+
+    logger.debug("data_event_tables = %s", data_event_tables)
+    logger.debug("rec_particle_bank_name = %s", rec_particle_bank_name)
+    logger.debug("rec_particle_entry_indices = %s", rec_particle_entry_indices)
 
     # Select requested rows from REC::Particle data
     rec_particle_event_table = data_event_tables[rec_particle_bank_name]
@@ -512,6 +523,9 @@ def preprocess_rec_particle(
 
 def label_rec_particle(data_event_tables, decay=(3122, (2212, -211))):
 
+    logger.debug("data_event_tables = %s", data_event_tables)
+    logger.debug("decay = %s", decay)
+
     # Set static bank info
     rec_particle_bank_name = "REC::Particle"
     mc_lund_bank_name = "MC::Lund"
@@ -555,6 +569,8 @@ def label_rec_particle(data_event_tables, decay=(3122, (2212, -211))):
 
 def get_kinematics_rec_particle(data_event_tables):
 
+    logger.debug("data_event_tables = %s", data_event_tables)
+
     # Set static bank info
     rec_kinematics_bank_name = "REC::Kinematics"
 
@@ -578,6 +594,8 @@ def preprocess_rec_traj(x):
     :return: new_x
     """
     # NOTE: Assume indices go 0-10 : pindex, index, detector, layer, x, y, z, cx, cy, cz, path
+
+    logger.debug("x = %s", x)
 
     (
         _,  # pindex_idx
@@ -622,6 +640,8 @@ def preprocess_rec_traj(x):
 
 def get_links_rec_traj(x):
 
+    logger.debug("x = %s", x)
+
     pindex = 0
     link_indices = []
     prev_el = -10
@@ -638,6 +658,8 @@ def get_links_rec_traj(x):
 def get_edge_index_rec_traj(x):
 
     link_indices = get_links_rec_traj(x)
+
+    logger.debug("link_indices = %s", link_indices)
 
     edge_index = torch.tensor(
         [[i, j] for el_ in link_indices for i in el_ for j in el_], dtype=torch.long

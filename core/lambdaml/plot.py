@@ -7,6 +7,13 @@ import matplotlib.pyplot as plt
 from scipy.stats import ks_2samp
 from sklearn.manifold import TSNE
 
+# Local imports
+from .log import setup_logger
+
+
+# Set module logger
+logger = setup_logger(__name__)
+
 
 # Plot metrics by epoch
 def plot_epoch_metrics(

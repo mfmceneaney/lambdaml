@@ -1,4 +1,3 @@
-# ----------------------------------------------------------------------------------------------------#
 # PLOT
 import matplotlib.pyplot as plt
 from scipy.stats import ks_2samp

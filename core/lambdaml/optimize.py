@@ -8,6 +8,11 @@ from uuid import uuid4
 
 # Local imports
 from .pipeline import pipeline_titok
+from .log import setup_logger
+
+
+# Set module logger
+logger = setup_logger(__name__)
 
 
 # Define the objective function

@@ -1,6 +1,7 @@
 # MODELS
 # pylint: disable=no-member
 # pylint: disable=abstract-method
+# pylint: disable=arguments-differ
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -11,6 +12,13 @@ from torch_geometric.nn import (
     GINConv,
     global_mean_pool,
 )
+
+# Local imports
+from .log import setup_logger
+
+
+# Set module logger
+logger = setup_logger(__name__)
 
 
 # Gradient Reversal Function

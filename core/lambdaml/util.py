@@ -1,3 +1,4 @@
+# UTIL
 import yaml
 import json
 import argparse
@@ -83,17 +84,15 @@ def load_json(path):
         data = json.load(f)
     return data
 
-import argparse
 
-
-def float_or_choice(value, choices = ['auto', 'default', 'none']):
+def float_or_choice(value, choices=("auto", "default", "none")):
     try:
         # Try converting to float
         return float(value)
-    except ValueError:
+    except ValueError as exc:
         # If not a float, check if it's an allowed string
         if value.lower() in choices:
             return value.lower()
         raise argparse.ArgumentTypeError(
             f"Value must be a float or one of: {', '.join(choices)}"
-        )
+        ) from exc

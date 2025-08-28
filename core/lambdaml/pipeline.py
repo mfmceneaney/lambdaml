@@ -10,7 +10,6 @@ from os import makedirs
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import hipopy.hipopy as hp
-import numpy as np
 
 # Local imports
 from .data import (
@@ -258,8 +257,8 @@ def pipeline_titok(
         device=device,
         verbose=verbose,
     )
-    logger.debug("train_logs = %s",train_logs)
-    logger.info("soft_labels = %s",soft_labels)
+    logger.debug("train_logs = %s", train_logs)
+    logger.debug("soft_labels = %s", soft_labels)
 
     # Save model
     logger.info("Saving GNN Encoder")
@@ -328,6 +327,7 @@ def pipeline_titok(
         coeff_soft=coeff_soft,
         device=device,
     )
+    logger.debug("src_val_logs = %s", src_val_logs)
     logger.info("Validating model on target validation dataset")
     tgt_val_logs = val_titok(
         encoder,
@@ -348,6 +348,7 @@ def pipeline_titok(
         coeff_soft=coeff_soft,
         device=device,
     )
+    logger.debug("tgt_val_logs = %s", tgt_val_logs)
 
     # Save training logs to json
     logger.info("Saving training logs")
@@ -488,7 +489,7 @@ def pipeline_titok(
     logger.info("Saving training metrics figure")
     plt.show()
     plt.tight_layout()
-    fig.savefig(osp.join(out_dir, metrics_plot_path), bbox_inches='tight')
+    fig.savefig(osp.join(out_dir, metrics_plot_path), bbox_inches="tight")
 
     # ----- t-SNE model representation
     logger.info("Collecting embeddings")
@@ -661,8 +662,8 @@ def pipeline_preprocessing(
 
     # Iterate hipo files
     logger.info("Looping input hipo files")
-    logger.debug("file_list = %s",file_list)
-    logger.debug("banks = %s",banks)
+    logger.debug("file_list = %s", file_list)
+    logger.debug("banks = %s", banks)
     for batch in tqdm.tqdm(hp.iterate(file_list, banks=banks, step=step)):
 
         # Set bank names and entry names to look at
@@ -703,10 +704,6 @@ def pipeline_preprocessing(
 
     # Create (or add to) a PyG Dataset
     logger.info("Adding data to LazyDataset")
-    logger.debug("out_dataset_path = %s", out_dataset_path)
-    logger.debug("len(datalist) = %s", len(datalist))
-    logger.debug("lazy_ds_batch_size = %s", lazy_ds_batch_size)
-    logger.debug("num_workers = %s", num_workers)
     LazyDataset(
         out_dataset_path,
         transform=None,
