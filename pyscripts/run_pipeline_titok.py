@@ -257,7 +257,7 @@ argparser.add_argument(
 
 argparser.add_argument(
     "--lambda_fn",
-    type=lambda value: float_or_choice(value,choices=["sigmoid_growth", "sigmoid_decay", "linear_growth", "linear_decay"]),,
+    type=lambda value: float_or_choice(value,choices=["sigmoid_growth", "sigmoid_decay", "linear_growth", "linear_decay"]),
     default="sigmoid_growth",
     help="Lambda function",
 )
