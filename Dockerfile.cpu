@@ -12,6 +12,7 @@ RUN apt-get update && \
         git \
         python3-venv \
         python3-pip \
+        texlive-latex-base \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
