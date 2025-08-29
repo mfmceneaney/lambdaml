@@ -2,7 +2,7 @@ import argparse
 import json
 
 # Local imports
-from lambdaml.preprocessing import (
+from lambdaml.preprocess import (
     preprocess_rec_particle,
     label_rec_particle,
     get_kinematics_rec_particle,
