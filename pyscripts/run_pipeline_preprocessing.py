@@ -84,9 +84,9 @@ argparser.add_argument(
 
 argparser.add_argument(
     "--file_list",
-    type=str,
-    default="file_*.hipo",
-    help="File list to use",
+    type=list,
+    default=["file_*.hipo"],
+    help="List of file regexs to use",
 )
 
 argparser.add_argument(
@@ -110,7 +110,7 @@ argparser.add_argument(
 argparser.add_argument(
     "--out_dataset_path",
     type=str,
-    default="src_dataset/",
+    default="/out/src_dataset/",
     help="Directory path for output dataset",
 )
 
