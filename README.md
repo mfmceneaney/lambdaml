@@ -39,6 +39,11 @@ docker run --rm lambdaml-project python3 </path/to/my/python/sript.py>
 Once you start the container you should have the following environment variables:
 - `LAMBDAML_HOME`
 - `LAMBDAML_APP_DIR`
+If you have input data directories and output data directories for your preprocessing or training pipelines, you can mount several directories.
+```bash
+docker run --rm -it -v /path/to/lambdaml:/usr/src/lambdaml -v /path/for/input/files:/data -v /path/for/out/files:/out lambdaml-project-cu129
+```
+For use with CUDA, see the bit about installing PyTorch-Geometric on an HPC cluster below as well.
 
 ### Installation by Hand
 
@@ -63,7 +68,7 @@ pip install -r requirements-pyg-pt28-cpu.txt # Adjust pytorch and cuda version a
 ```
 
 <details>
-<summary>:x: Installing PyTorch-Geometric on an HPC cluster</summary>
+<summary>:x: Installing PyTorch-Geometric on an HPC Cluster</summary>
 
 Follow the installation instructions on the [PyTorch Geometric Documentation](https://pytorch-geometric.readthedocs.io/en/latest/notes/installation.html).
 
