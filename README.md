@@ -73,12 +73,17 @@ WARNING: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status
 ERROR: Could not find a version that satisfies the requirement pyg-lib (from versions: none)
 ERROR: No matching distribution found for pyg-lib
 ```
-In this case, try downloading locally whatever distribution you want from the repo link posted on the installation page for installing with pip.  This will look like `https://data.pyg.org/whl/torch-${TORCH_VERSION}.html`.
+In this case, try downloading locally whatever distribution you need from the repo link posted on the installation page for installing with pip.  This will look like `https://data.pyg.org/whl/torch-${TORCH_VERSION}+${CUDA_VERSION}.html`.
 Then transfer the downloaded distribution (e.g. with scp or rsync) to ifarm.
 
 In your virtual environment you can now install from the local path:
 ```
 pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f /path/to/distribution/you/just/uploaded
+```
+
+For your convenience put your packages in some directory `/path/to/packages` and use the CUDA docker file to install from this path.  You will need to mount the directory to `/pyg_packages` for the build to succeed.
+```bash
+docker build -v /path/to/packages:/pyg_packages -f /path/to/lambdaml/Dockerfile.cu129 -t lambdaml-project /path/to/lambdaml
 ```
 </details>
 
