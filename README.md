@@ -45,6 +45,29 @@ docker run --rm -it -v /path/to/lambdaml:/usr/src/lambdaml -v /path/for/input/fi
 ```
 For use with CUDA, see the bit about installing PyTorch-Geometric on an HPC cluster below as well.
 
+<details>
+<summary>:x: Running in a SLURM Job</summary>
+
+It is very hard to access the different volumes of a HPC cluster from Docker, so use singularity instead.
+Download the PyTorch-Geometric packages and copy them to `/path/to/lambdaml/pyg_packages`. Then, build the container with
+```bash
+singularity build lambdaml-cu129.sif Singularity.def.cu129
+```
+Then run the container, binding to some volumes on your cluster, with
+```bash
+singularity exec -B /volatile,/work lambdaml-cu129.sif bash
+```
+Or, if you just need to run a python script within the container
+```bash
+singularity exec \
+  --bind /scratch/myuser/data:/data \
+  my-image.sif \
+  python script.py --input /data/input.csv
+  TODO
+```
+
+</details>
+
 ### Installation by Hand
 
 Begin by cloning the repository
@@ -95,7 +118,7 @@ docker build -v /path/to/packages:/pyg_packages -f /path/to/lambdaml/Dockerfile.
 Add the following to your startup script
 ```bash
 cd /path/to/lambdaml
-source $PWD/bin/env.sh # csh version also available
+source $PWD/env/env.sh # csh version also available
 cd
 ```
 
