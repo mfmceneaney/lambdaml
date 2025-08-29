@@ -34,4 +34,4 @@ RUN pip install --upgrade pip && \
     pip install -r requirements-pyg-pt28-cpu.txt && \
     pip cache purge
 
-CMD ["/bin/bash","-c","source /usr/src/lambdaml/bin/env.sh && exec bash"]
+CMD ["/bin/bash","-c","source /usr/src/lambdaml/env/env.sh && exec bash"]
