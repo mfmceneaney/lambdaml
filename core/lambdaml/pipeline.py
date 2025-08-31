@@ -664,7 +664,7 @@ def pipeline_preprocessing(
     logger.info("Looping input hipo files")
     logger.debug("file_list = %s", file_list)
     logger.debug("banks = %s", banks)
-    for batch in tqdm.tqdm(hp.iterate(file_list, banks=banks, step=step)):
+    for batch in tqdm(hp.iterate(file_list, banks=banks, step=step)):
 
         # Set bank names and entry names to look at
         all_keys = list(batch.keys())
