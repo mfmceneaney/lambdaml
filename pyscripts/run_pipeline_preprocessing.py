@@ -86,7 +86,7 @@ argparser.add_argument(
     "--file_list",
     type=str,
     default=["file_*.hipo"],
-    nargs="+"
+    nargs="+",
     help="List of file regexs to use",
 )
 
