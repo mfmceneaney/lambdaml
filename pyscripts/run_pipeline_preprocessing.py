@@ -84,19 +84,21 @@ argparser.add_argument(
 
 argparser.add_argument(
     "--file_list",
-    type=list,
+    type=str,
     default=["file_*.hipo"],
+    nargs="+"
     help="List of file regexs to use",
 )
 
 argparser.add_argument(
     "--banks",
     type=str,
-    default=(
+    default=[
         "REC::Particle",
         "REC::Kinematics",
         "MC::Lund",
-    ),
+    ],
+    nargs="+",
     help="Banks to use",
 )
 
