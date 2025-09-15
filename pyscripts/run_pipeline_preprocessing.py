@@ -154,7 +154,7 @@ for fn_name in fn_names:
         # Check if any kwargs are given
         arg_fn_name = args[fn_name]
         if args[fn_name+"_kwargs"] is not None:
-            args[fn_name] = lambda x, **kwargs: fn_choices[arg_fn_name](x, **kwargs[fn_name+"_kwargs"])
+            args[fn_name] = lambda x: fn_choices[arg_fn_name](x, **args[fn_name+"_kwargs"])
         else:
             args[fn_name] = fn_choices[args_fn_name]
 
