@@ -657,14 +657,14 @@ def pipeline_preprocessing(
     if kinematics_fn_kwargs is None:
         kinematics_fn_kwargs = {}
 
-    # Initialize graph list
-    datalist = []
-
     # Iterate hipo files
     logger.info("Looping input hipo files")
     logger.debug("file_list = %s", file_list)
     logger.debug("banks = %s", banks)
     for batch in tqdm(hp.iterate(file_list, banks=banks, step=step)):
+
+        # Initialize graph list
+        datalist = []
 
         # Set bank names and entry names to look at
         all_keys = list(batch.keys())
@@ -702,14 +702,13 @@ def pipeline_preprocessing(
             # Add graph to dataset
             datalist.append(data)
 
-    # Create (or add to) a PyG Dataset
-    logger.info("Adding data to LazyDataset")
-    LazyDataset(
-        out_dataset_path,
-        transform=None,
-        pre_transform=None,
-        pre_filter=None,
-        datalist=datalist,
-        batch_size=lazy_ds_batch_size,
-        num_workers=num_workers,
-    )
+        # Create (or add to) a PyG Dataset
+        LazyDataset(
+            out_dataset_path,
+            transform=None,
+            pre_transform=None,
+            pre_filter=None,
+            datalist=datalist,
+            batch_size=lazy_ds_batch_size,
+            num_workers=num_workers,
+        )
