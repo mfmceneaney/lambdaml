@@ -46,8 +46,12 @@ class SmallDataset(InMemoryDataset):
         return ["data.pt"]
 
     def clean_data(self, data):
+
+        # Create a new graph and remove undesired attributes
+        logger.debug(f"Cleaning data : {data}")
+        if not isinstance(data,Data): return data
         cleaned_data = Data()
-        for key in data.keys():
+        for key in data:
             if key in (self.clean_keys):
                 continue
             value = getattr(data, key)
@@ -126,8 +130,10 @@ class LargeDataset(Dataset):
     def clean_data(self, data):
 
         # Create a new graph and remove undesired attributes
+        logger.debug(f"Cleaning data : {data}")
+        if not isinstance(data,Data): return data
         cleaned_data = Data()
-        for key in data.keys():
+        for key in data:
             if key in (self.clean_keys):
                 continue
             value = getattr(data, key)
@@ -258,6 +264,13 @@ class LazyDataset(Dataset):
                     )
                     self.process_batch_start_idx = metadata["num_batches"] - 1
 
+                    # Check that the number of data files and the number of batches are consistent
+                    nfiles = len(glob(os.path.join(self.processed_dir, "data*.pt")))
+                    if nfiles != metadata["num_batches"]:
+                        raise RuntimeError(
+                            f"Number of data files {nfiles} does not match number of batches {metadata['num_batches']}, dataset is corrupted!"
+                        )
+
                     # Reset metadata for when you write it below
                     metadata = {
                         "size": self.size,
@@ -313,8 +326,12 @@ class LazyDataset(Dataset):
             ]
 
     def clean_data(self, data):
+
+        # Create a new graph and remove undesired attributes
+        logger.debug(f"Cleaning data : {data}")
+        if not isinstance(data,Data): return data
         cleaned_data = Data()
-        for key in data.keys():
+        for key in data:
             if key in (self.clean_keys):
                 continue
             value = getattr(data, key)
@@ -337,6 +354,8 @@ class LazyDataset(Dataset):
 
         data = [self.clean_data(d) for d in data]
 
+        logger.info(f"Saving batch {idx} with {len(data)} graphs")
+        logger.info(f"Processed dir: {self.processed_dir}  File name: {self.processed_file_names[idx + self.process_batch_start_idx]}")
         torch.save(
             data,
             os.path.join(
