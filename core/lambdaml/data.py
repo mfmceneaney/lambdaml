@@ -356,7 +356,7 @@ class LazyDataset(Dataset):
 
         data = [self.clean_data(d) for d in data]
 
-        logger.info(f"Saving batch {idx} with {len(data)} graphs")
+        logger.info(f"Saving batch {idx + self.process_batch_start_idx} with {len(data)} graphs")
         logger.info(f"Processed dir: {self.processed_dir}  File name: {self.processed_file_names[idx + self.process_batch_start_idx]}")
         torch.save(
             data,
