@@ -15,6 +15,60 @@ from .log import setup_logger
 logger = setup_logger(__name__)
 
 
+def parse_suggestion_rule(s):
+    """
+    Parse suggestion rule string of format:
+    - int:start:end
+    - float:start:end[:log][:step]
+    - cat:val1,val2,...
+    """
+    if '=' not in s:
+        raise argparse.ArgumentTypeError(f"Suggestion must be in format name=rule, got '{s}'")
+
+    name, rule = s.split("=", 1)
+
+    if rule.startswith("int:"):
+        parts = rule[4:].split(":")
+        if len(parts) not in (2, 3):
+            raise argparse.ArgumentTypeError(f"Invalid int rule: {rule}")
+        start, end = int(parts[0]), int(parts[1])
+        step = int(parts[2]) if len(parts) == 3 else 1
+        return {name : {"type":"int", "range":(start, end), "step": step}}
+
+    elif rule.startswith("float:"):
+        parts = rule[6:].split(":")
+        if len(parts) < 2:
+            raise argparse.ArgumentTypeError(f"Invalid float rule: {rule}")
+
+        low = float(parts[0])
+        high = float(parts[1])
+        log = False
+        step = None
+
+        if len(parts) >= 3 and parts[2]:
+            if parts[2] == "log":
+                log = True
+            else:
+                raise argparse.ArgumentTypeError(f"Expected 'log' or empty third field in float rule: {rule}")
+
+        if len(parts) == 4 and parts[3]:
+            try:
+                step = float(parts[3])
+            except ValueError:
+                raise argparse.ArgumentTypeError(f"Invalid step value in float rule: {parts[3]}")
+
+        return {name: {"type":"float", "range":(low, high), "log": log, "step": step}}
+
+    elif rule.startswith("cat:"):
+        choices = rule[4:].split(",")
+        if not choices:
+            raise argparse.ArgumentTypeError(f"No choices provided for categorical: {rule}")
+        return {name: {"type":"cat", "values": choices}}
+
+    else:
+        raise argparse.ArgumentTypeError(f"Unknown rule type: {rule}")
+
+
 # Define the objective function
 def objective(
     trial,
