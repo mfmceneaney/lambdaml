@@ -236,7 +236,7 @@ class LazyDataset(Dataset):
                 if len(self.datalist) % self.batch_size > 0 and not self.drop_last
                 else 0
             )
-        self.size = len(datalist) if datalist is not None else 0
+        self.size = len(datalist) - (len(datalist) % self.batch_size if self.drop_last else 0) if datalist is not None else 0
         self.weights_only = weights_only
         self.process_batch_start_idx = 0
 
@@ -262,7 +262,7 @@ class LazyDataset(Dataset):
                         if self.size % self.batch_size > 0 and not self.drop_last
                         else 0
                     )
-                    self.process_batch_start_idx = metadata["num_batches"] - 1
+                    self.process_batch_start_idx = metadata["num_batches"] - (1 if metadata["size"] % self.batch_size > 0 else 0)
 
                     # Check that the number of data files and the number of batches are consistent
                     nfiles = len(glob(os.path.join(self.processed_dir, "data*.pt")))
