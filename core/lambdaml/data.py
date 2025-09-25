@@ -376,7 +376,10 @@ class LazyDataset(Dataset):
         local_num_batches = self.num_batches - self.process_batch_start_idx
 
         if self.num_workers <= 0:
-            tqdm([self.save_graph_batch(idx) for idx in range(local_num_batches)])
+            if local_num_batches > 1:
+                tqdm([self.save_graph_batch(idx) for idx in range(local_num_batches)])
+            else:
+                self.save_graph_batch(0)
         else:
             with multiprocessing.Pool(
                 processes=min(local_num_batches, self.num_workers)
