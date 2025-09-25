@@ -37,16 +37,14 @@ argparser.add_argument(
 
 argparser.add_argument(
     "--is_tudataset",
-    type=bool,
-    default=True,
-    help="Whether to use tudataset or not",
+    action="store_true",
+    help="Option to use TUDataset datasets (only for non-lazy datasets",
 )
 
 argparser.add_argument(
     "--use_lazy_dataset",
-    type=bool,
-    default=False,
-    help="Whether to use lazy dataset or not",
+    action="store_true",
+    help="Option to use lazy datasets (only for non-tudataset datasets)",
 )
 
 argparser.add_argument(
