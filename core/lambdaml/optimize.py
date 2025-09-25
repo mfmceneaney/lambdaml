@@ -125,6 +125,7 @@ def optimize(
     metric_name="auc",
     metric_fn=lambda logs: logs[0]["auc"],
     suggestion_rules=None,
+    pipeline=pipeline_titok,
     pipeline_kwargs=None,
     n_trials=100,
 ):
@@ -159,7 +160,7 @@ def optimize(
             metric_name=metric_name,
             metric_fn=metric_fn,
             suggestion_rules=suggestion_rules,
-            pipeline=pipeline_titok,
+            pipeline=pipeline,
             pipeline_kwargs=pipeline_kwargs,
         ),
         n_trials=n_trials,
