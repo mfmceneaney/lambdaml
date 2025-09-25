@@ -33,6 +33,16 @@ def objective(
         pipeline_kwargs = {}
     suggestions = {"trial": trial}
 
+    # Suggestion rule format:
+    # suggestion_rules = {
+    #     "param_name": {
+    #         "type": "float" | "int" | "categorical",
+    #         "range": [min, max],  # for float and int
+    #         "values": [val1, val2, ...],  # for categorical
+    #         "log": True | False,  # for float
+    #         "step": step_size,  # for float
+    #     },
+
     # Loop suggestion rules
     for key in suggestion_rules:
         suggestion_rule = suggestion_rules[key]
@@ -53,7 +63,7 @@ def objective(
                 # Sample based on type
                 if suggestion_type == "float":
                     log = "log" in suggestion_rule and suggestion_rule["log"]
-                    step = suggestion_rule["step"] if "step" in suggestion_rule else 1
+                    step = suggestion_rule["step"] if "step" in suggestion_rule else None
                     trial.suggest_float(key, *suggestion_range, step=step, log=log)
                 elif suggestion_type == "int":
                     trial.suggest_int(key, *suggestion_range)
