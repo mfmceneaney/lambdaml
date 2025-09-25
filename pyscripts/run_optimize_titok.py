@@ -475,6 +475,50 @@ argparser.add_argument(
     help="Number of trials for Optuna",
 )   
 
+argparser.add_argument(
+    "--opt__sampler_name",
+    type=str,
+    default="tpe",
+    choices=["grid", "random", "tpe", "cmaes", "gp", "partialfixed", "nsga2", "qmc"],
+    help="Optuna sampler name",
+)
+
+argparser.add_argument(
+    "--opt__sampler_args",
+    type=json.loads,
+    default=None,
+    help="Optuna sampler args list in JSON format, e.g., '[arg1, arg2]'",
+)
+
+argparser.add_argument(
+    "--opt__sampler_kwargs",
+    type=json.loads,
+    default=None,
+    help="Optuna sampler kwargs dict in JSON format, e.g., '{\"arg1\": val1, \"arg2\": val2}'",
+)
+
+argparser.add_argument(
+    "--opt__pruner_name",
+    type=str,
+    default="median",
+    choices=["median", "noprune", "patient", "percentile", "successivehalving", "hyperband", "threshold", "wilcoxon"],
+    help="Optuna pruner name",
+)
+
+argparser.add_argument(
+    "--opt__pruner_args",
+    type=json.loads,
+    default=None,
+    help="Optuna pruner args list in JSON format, e.g., '[arg1, arg2]'",
+)
+
+argparser.add_argument(
+    "--opt__pruner_kwargs",
+    type=json.loads,
+    default=None,
+    help="Optuna pruner kwargs dict in JSON format, e.g., '{\"arg1\": val1, \"arg2\": val2}'",
+)
+
 # Parse arguments and initialize argument dictionary
 args_raw = argparser.parse_args()
 args = {}

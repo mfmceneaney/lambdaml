@@ -2,6 +2,27 @@
 # pylint: disable=no-member
 import optuna
 from optuna.integration.wandb import WeightsAndBiasesCallback
+from optuna.samplers import (
+    GridSampler,
+    RandomSampler,
+    TPESampler,
+    CmaEsSampler,
+    GPSampler,
+    PartialFixedSampler,
+    NSGAIISampler,
+    QMCSampler,
+)
+from optuna.pruners import (
+    MedianPruner,
+    NopPruner,
+    PatientPruner,
+    PercentilePruner,
+    SuccessiveHalvingPruner,
+    HyperbandPruner,
+    ThresholdPruner,
+    WilcoxonPruner,
+)
+import argparse
 import wandb
 import os
 from uuid import uuid4
@@ -14,6 +35,31 @@ from .log import setup_logger
 # Set module logger
 logger = setup_logger(__name__)
 
+# Define available samplers
+sampler_choices = {
+    "grid": GridSampler,
+    "random": RandomSampler,
+    "tpe": TPESampler,
+    "cmaes": CmaEsSampler,
+    "gp": GPSampler,
+    "partial_fixed": PartialFixedSampler,
+    "nsga2": NSGAIISampler,
+    "qmc": QMCSampler,
+    
+}
+
+# Define available pruners
+pruner_choices = {
+    "median": MedianPruner,
+    "noprune": NopPruner,
+    "patient": PatientPruner,
+    "percentile": PercentilePruner,
+    "successive_halving": SuccessiveHalvingPruner,
+    "hyperband": HyperbandPruner,
+    "threshold": ThresholdPruner,
+    "wilcoxon": WilcoxonPruner,
+}
+
 
 def parse_suggestion_rule(s):
     """
@@ -22,8 +68,10 @@ def parse_suggestion_rule(s):
     - float:start:end[:log][:step]
     - cat:val1,val2,...
     """
-    if '=' not in s:
-        raise argparse.ArgumentTypeError(f"Suggestion must be in format name=rule, got '{s}'")
+    if "=" not in s:
+        raise argparse.ArgumentTypeError(
+            f"Suggestion must be in format name=rule, got '{s}'"
+        )
 
     name, rule = s.split("=", 1)
 
@@ -33,7 +81,7 @@ def parse_suggestion_rule(s):
             raise argparse.ArgumentTypeError(f"Invalid int rule: {rule}")
         start, end = int(parts[0]), int(parts[1])
         step = int(parts[2]) if len(parts) == 3 else 1
-        return {name : {"type":"int", "range":(start, end), "step": step}}
+        return {name: {"type": "int", "range": (start, end), "step": step}}
 
     elif rule.startswith("float:"):
         parts = rule[6:].split(":")
@@ -49,21 +97,27 @@ def parse_suggestion_rule(s):
             if parts[2] == "log":
                 log = True
             else:
-                raise argparse.ArgumentTypeError(f"Expected 'log' or empty third field in float rule: {rule}")
+                raise argparse.ArgumentTypeError(
+                    f"Expected 'log' or empty third field in float rule: {rule}"
+                )
 
         if len(parts) == 4 and parts[3]:
             try:
                 step = float(parts[3])
             except ValueError:
-                raise argparse.ArgumentTypeError(f"Invalid step value in float rule: {parts[3]}")
+                raise argparse.ArgumentTypeError(
+                    f"Invalid step value in float rule: {parts[3]}"
+                )
 
-        return {name: {"type":"float", "range":(low, high), "log": log, "step": step}}
+        return {name: {"type": "float", "range": (low, high), "log": log, "step": step}}
 
     elif rule.startswith("cat:"):
         choices = rule[4:].split(",")
         if not choices:
-            raise argparse.ArgumentTypeError(f"No choices provided for categorical: {rule}")
-        return {name: {"type":"cat", "values": choices}}
+            raise argparse.ArgumentTypeError(
+                f"No choices provided for categorical: {rule}"
+            )
+        return {name: {"type": "cat", "values": choices}}
 
     else:
         raise argparse.ArgumentTypeError(f"Unknown rule type: {rule}")
@@ -117,7 +171,9 @@ def objective(
                 # Sample based on type
                 if suggestion_type == "float":
                     log = "log" in suggestion_rule and suggestion_rule["log"]
-                    step = suggestion_rule["step"] if "step" in suggestion_rule else None
+                    step = (
+                        suggestion_rule["step"] if "step" in suggestion_rule else None
+                    )
                     trial.suggest_float(key, *suggestion_range, step=step, log=log)
                 elif suggestion_type == "int":
                     trial.suggest_int(key, *suggestion_range)
@@ -160,7 +216,7 @@ def objective(
         name=f"trial-{trial.number}",
         config=suggestions,
         dir=str(output_dir),
-        reinit=True,
+        reinit=False,
     )
 
     # Run the pipeline which is assumed to return some logs
@@ -192,6 +248,12 @@ def optimize(
     pipeline=pipeline_titok,
     pipeline_kwargs=None,
     n_trials=100,
+    sampler_name="tpe",
+    sampler_args=None,
+    sampler_kwargs=None,
+    pruner_name="median",
+    pruner_args=None,
+    pruner_kwargs=None,
 ):
 
     # Check arguments
@@ -207,12 +269,26 @@ def optimize(
         url=storage_url  # or your PostgreSQL/MySQL URL
     )
 
+    # Create sampler
+    sampler = sampler_choices[sampler_name.lower()](
+            *([] if sampler_args is None else sampler_args),
+            **({} if sampler_kwargs is None else sampler_kwargs),
+        ) if sampler_name.lower() in sampler_choices else None
+
+    # Create pruner
+    pruner = pruner_choices[pruner_name.lower()](
+            *([] if pruner_args is None else pruner_args),
+            **({} if pruner_kwargs is None else pruner_kwargs),
+        ) if pruner_name.lower() in pruner_choices else None
+
     # Create study
     study = optuna.create_study(
         direction=optuna_study_direction,
         study_name=optuna_study_name,
         storage=storage,
         load_if_exists=True,
+        sampler=sampler,
+        pruner=pruner,
     )
 
     # Optimize
