@@ -13,13 +13,13 @@ def setup_logger(name: str) -> logging.Logger:
         )
         handler.setFormatter(formatter)
         logger.addHandler(handler)
+        logger.propagate = False  # <- Prevent messages from bubbling to root
 
     return logger
 
 
 def set_global_log_level(level_str: str):
     level = getattr(logging, level_str.upper(), logging.INFO)
-    logging.basicConfig(level=level)  # affects root logger only
 
     # Update all existing loggers
     logger_dict = logging.root.manager.loggerDict
