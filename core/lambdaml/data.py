@@ -262,7 +262,7 @@ class LazyDataset(Dataset):
                         if self.size % self.batch_size > 0 and not self.drop_last
                         else 0
                     )
-                    self.process_batch_start_idx = metadata["num_batches"] - (1 if metadata["size"] % self.batch_size > 0 else 0)
+                    self.process_batch_start_idx = metadata["num_batches"] - 1 #NOTE: This will be incremented below if the last batch is full.
 
                     # Check that the number of data files and the number of batches are consistent
                     nfiles = len(glob(os.path.join(self.processed_dir, "data*.pt")))
@@ -297,6 +297,8 @@ class LazyDataset(Dataset):
                 if self.datalist is None:
                     self.datalist = []
                 self.datalist = [*_loaded_batch, *self.datalist]
+            else:
+                self.process_batch_start_idx += 1 #NOTE: If last batch is full, increment the starting batch index.
 
         # (Re)create the metadata file
         os.makedirs(self.root, exist_ok=True)
