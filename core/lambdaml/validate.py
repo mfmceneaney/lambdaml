@@ -24,6 +24,7 @@ def val_titok(
     pretraining=False,
     return_labels=True,
     num_classes=2,
+    sg_idx=1,
     confidence_threshold=0.8,
     temp=2.0,
     alpha=0.5,
@@ -102,6 +103,10 @@ def val_titok(
             total_loss_auc += loss_auc.item()
             total_loss_soft += loss_soft.item()
 
+            # Compute ROC curve and AUC
+            get_auc(src_labels, src_probs[:, sg_idx])
+            logger.debug("auc = %s", auc)
+
             # Count correct predictions
             correct += (src_preds == src_labels).sum().item()
             total += src_labels.size(0)
@@ -132,6 +137,7 @@ def val_titok(
     all_src_labels = torch.tensor(all_src_labels)
 
     logs = {
+        "auc": auc,
         "loss": total_loss,
         "loss_cls": total_loss_cls,
         "loss_mmd": total_loss_mmd,
@@ -218,6 +224,12 @@ def val_titok(
 #     }
 
 #     return logs
+
+
+def get_auc(labels, probs):
+    fpr, tpr, thresholds = roc_curve(labels, probs)
+    auc_score = auc(fpr, tpr)
+    return auc_score
 
 
 def get_best_threshold(labels, probs):

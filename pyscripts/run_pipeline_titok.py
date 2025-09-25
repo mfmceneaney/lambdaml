@@ -138,6 +138,13 @@ argparser.add_argument(
 )
 
 argparser.add_argument(
+    "--sg_idx",
+    type=int,
+    default=1,
+    help="Index of signal class (must be in [0, num_classes-1])",
+)
+
+argparser.add_argument(
     "--gnn_type",
     type=str,
     default="gin",

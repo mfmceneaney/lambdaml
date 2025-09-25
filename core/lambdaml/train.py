@@ -1,6 +1,7 @@
 # TRAIN
 # pylint: disable=no-member
 from tqdm import tqdm
+import optuna
 
 # Local imports
 from .functional import sigmoid_growth, gen_soft_labels, loss_titok
@@ -176,6 +177,7 @@ def train_titok(
     src_val_loader,
     tgt_val_loader,
     num_classes=2,
+    sg_idx=1,
     soft_labels_temp=2,
     nepochs=100,
     lr_scheduler=None,
@@ -189,6 +191,8 @@ def train_titok(
     pretrain_frac=0.2,
     device="cuda:0",
     verbose=True,
+    trial=None,
+    metric_fn=lambda logs: logs[1]["auc"],  # Available logs are [train_logs, val_logs]
 ):
 
     # Create soft labels #NOTE: Pretrain first
@@ -209,6 +213,7 @@ def train_titok(
 
     # Set logging lists to return
     logs = {}
+    logs["train_aucs"] = []
     logs["train_losses"] = []
     logs["train_losses_cls"] = []
     logs["train_losses_auc"] = []
@@ -217,6 +222,7 @@ def train_titok(
     logs["train_accs_raw"] = []
     logs["train_accs_per_class"] = []
     logs["train_accs_balanced"] = []
+    logs["val_aucs"] = []
     logs["val_losses"] = []
     logs["val_losses_cls"] = []
     logs["val_losses_auc"] = []
@@ -311,6 +317,7 @@ def train_titok(
             soft_labels,
             pretraining=pretraining,
             num_classes=num_classes,
+            sg_idx=sg_idx,
             confidence_threshold=confidence_threshold,
             temp=temp,
             alpha=alpha,
@@ -329,6 +336,7 @@ def train_titok(
             soft_labels,
             pretraining=pretraining,
             num_classes=num_classes,
+            sg_idx=sg_idx,
             confidence_threshold=confidence_threshold,
             temp=temp,
             alpha=alpha,
@@ -341,7 +349,20 @@ def train_titok(
         encoder.train()
         clf.train()
 
+        # Optionally prune if using optuna
+        if trial is not None:
+
+            # Compute metric and report
+            metric = metric_fn([train_logs, val_logs])
+            logger.info("Reporting metric to optuna trial: %f", metric)
+            trial.report(metric, epoch)
+
+            # Handle pruning based on the intermediate value.
+            if trial.should_prune():
+                raise optuna.exceptions.TrialPruned()
+
         # Append metrics for logging
+        logs["train_aucs"].append(train_logs["auc"])
         logs["train_losses"].append(train_logs["loss"])
         logs["train_losses_cls"].append(train_logs["loss_cls"])
         logs["train_losses_mmd"].append(train_logs["loss_mmd"])
@@ -350,6 +371,7 @@ def train_titok(
         logs["train_accs_raw"].append(train_logs["acc_raw"])
         logs["train_accs_per_class"].append(train_logs["acc_per_class"])
         logs["train_accs_balanced"].append(train_logs["acc_balanced"])
+        logs["val_aucs"].append(val_logs["auc"])
         logs["val_losses"].append(val_logs["loss"])
         logs["val_losses_cls"].append(val_logs["loss_cls"])
         logs["val_losses_mmd"].append(val_logs["loss_mmd"])

@@ -65,6 +65,7 @@ def pipeline_titok(
     device_name="cuda" if torch.cuda.is_available() else "cpu",
     nepochs=100,
     num_classes=2,
+    sg_idx=1,
     gnn_type="gin",
     hdim_gnn=64,
     num_layers_gnn=3,
@@ -105,6 +106,7 @@ def pipeline_titok(
     clf_params_path="clf_params.json",
     # Optuna trial
     trial=None,
+    metric_fn=lambda logs: logs[1]["auc"],  # Available logs are [train_logs, val_logs]
 ):
 
     # Check arguments
@@ -256,6 +258,9 @@ def pipeline_titok(
         pretrain_frac=pretrain_frac,
         device=device,
         verbose=verbose,
+        trial=trial,
+        metric_fn=metric_fn,
+        sg_idx=sg_idx,
     )
     logger.debug("train_logs = %s", train_logs)
     logger.debug("soft_labels = %s", soft_labels)
@@ -326,6 +331,7 @@ def pipeline_titok(
         coeff_auc=coeff_auc,
         coeff_soft=coeff_soft,
         device=device,
+        sg_idx=sg_idx,
     )
     logger.debug("src_val_logs = %s", src_val_logs)
     logger.info("Validating model on target validation dataset")
@@ -347,6 +353,7 @@ def pipeline_titok(
         coeff_auc=coeff_auc,
         coeff_soft=coeff_soft,
         device=device,
+        sg_idx=sg_idx,
     )
     logger.debug("tgt_val_logs = %s", tgt_val_logs)
 
