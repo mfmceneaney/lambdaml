@@ -215,7 +215,7 @@ def objective(
         name=f"trial-{trial.number}",
         config=suggestions,
         dir=str(out_dir),
-        reinit=False,
+        reinit="finish_previous",
     )
 
     # Run the pipeline which is assumed to return some logs
