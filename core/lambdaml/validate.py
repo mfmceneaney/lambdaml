@@ -104,8 +104,8 @@ def val_titok(
             total_loss_soft += loss_soft.item()
 
             # Compute ROC curve and AUC
-            roc_auc = get_auc(src_labels, src_probs[:, sg_idx]) if torch.sum(src_labels) > 0 else 0.0
-            logger.debug("roc_auc = %s", roc_auc)
+            roc_info, _ = get_best_threshold(src_labels, src_probs[:, sg_idx], return_arrays=False)
+            logger.debug("roc_info = %s", roc_info)
 
             # Count correct predictions
             correct += (src_preds == src_labels).sum().item()
@@ -137,7 +137,7 @@ def val_titok(
     all_src_labels = torch.tensor(all_src_labels)
 
     logs = {
-        "auc": roc_auc,
+        **roc_info,
         "loss": total_loss,
         "loss_cls": total_loss_cls,
         "loss_mmd": total_loss_mmd,
@@ -232,7 +232,17 @@ def get_auc(labels, probs):
     return auc_score
 
 
-def get_best_threshold(labels, probs):
+def get_best_threshold(labels, probs, return_arrays=True):
+
+    # Check arguments
+    if torch.sum(src_labels) > 0:
+        return {
+            "auc": 0.0,
+            "best_fpr": 0.0,
+            "best_tpr": 0.0,
+            "best_fom": 0.0,
+            "best_thr": 0.0,
+        }
 
     # Compute ROC curve and AUC
     logger.debug("labels = %s", labels)
@@ -255,11 +265,15 @@ def get_best_threshold(labels, probs):
     logs = {
         "fpr": fpr,
         "tpr": tpr,
-        "roc_auc": roc_auc,
+        "auc": roc_auc,
         "best_fpr": best_fpr,
         "best_tpr": best_tpr,
         "best_fom": best_fom,
         "best_thr": best_thr,
     }
+
+    if not return_arrays:
+        logs.pop("fpr")
+        logs.pop("tpr")
 
     return logs, thresholds
