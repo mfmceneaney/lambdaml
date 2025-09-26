@@ -41,16 +41,14 @@ argparser.add_argument(
 
 argparser.add_argument(
     "--is_tudataset",
-    type=bool,
-    default=True,
-    help="Whether to use tudataset or not",
+    action="store_true",
+    help="Option to use TUDataset datasets (only for non-lazy datasets",
 )
 
 argparser.add_argument(
     "--use_lazy_dataset",
-    type=bool,
-    default=False,
-    help="Whether to use lazy dataset or not",
+    action="store_true",
+    help="Option to use lazy datasets (only for non-tudataset datasets)",
 )
 
 argparser.add_argument(
@@ -454,7 +452,7 @@ argparser.add_argument(
     type=str,
     nargs="*",
     default=[],
-    help="Suggestion rules for Optuna, e.g., 'key:int:min:max', 'key:float:min:max[:log][:step]' or 'key:cat:val1,val2,val3'",
+    help="Suggestion rules for Optuna, e.g., 'key=int:min:max', 'key=float:min:max[:log][:step]' or 'key=cat:val1,val2,val3'",
 )
 
 argparser.add_argument(
