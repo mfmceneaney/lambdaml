@@ -104,8 +104,8 @@ def val_titok(
             total_loss_soft += loss_soft.item()
 
             # Compute ROC curve and AUC
-            get_auc(src_labels, src_probs[:, sg_idx])
-            logger.debug("auc = %s", auc)
+            roc_auc = get_auc(src_labels, src_probs[:, sg_idx]) if torch.sum(src_probs[:, sg_idx]) > 0 else 0.0
+            logger.debug("roc_auc = %s", roc_auc)
 
             # Count correct predictions
             correct += (src_preds == src_labels).sum().item()
