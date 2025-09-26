@@ -690,7 +690,9 @@ def pipeline_preprocessing(
             # Preprocess graph
             x, edge_index = None, None
             if callable(preprocessing_fn):
-                x, edge_index = preprocessing_fn(data_event_tables, **preprocessing_fn_kwargs)
+                x, edge_index = preprocessing_fn(
+                    data_event_tables, **preprocessing_fn_kwargs
+                )
             else:
                 raise TypeError(
                     "Preprocessing function must be calllable, but found type(preprocessing_fn) =",

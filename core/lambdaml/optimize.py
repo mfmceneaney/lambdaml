@@ -45,7 +45,6 @@ sampler_choices = {
     "partial_fixed": PartialFixedSampler,
     "nsga2": NSGAIISampler,
     "qmc": QMCSampler,
-    
 }
 
 # Define available pruners
@@ -270,16 +269,24 @@ def optimize(
     )
 
     # Create sampler
-    sampler = sampler_choices[sampler_name.lower()](
+    sampler = (
+        sampler_choices[sampler_name.lower()](
             *([] if sampler_args is None else sampler_args),
             **({} if sampler_kwargs is None else sampler_kwargs),
-        ) if sampler_name.lower() in sampler_choices else None
+        )
+        if sampler_name.lower() in sampler_choices
+        else None
+    )
 
     # Create pruner
-    pruner = pruner_choices[pruner_name.lower()](
+    pruner = (
+        pruner_choices[pruner_name.lower()](
             *([] if pruner_args is None else pruner_args),
             **({} if pruner_kwargs is None else pruner_kwargs),
-        ) if pruner_name.lower() in pruner_choices else None
+        )
+        if pruner_name.lower() in pruner_choices
+        else None
+    )
 
     # Create study
     study = optuna.create_study(

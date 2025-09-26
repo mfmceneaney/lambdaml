@@ -49,7 +49,8 @@ class SmallDataset(InMemoryDataset):
 
         # Create a new graph and remove undesired attributes
         logger.debug(f"Cleaning data : {data}")
-        if not isinstance(data,Data): return data
+        if not isinstance(data, Data):
+            return data
         cleaned_data = Data()
         for key in data.keys():
             if key in (self.clean_keys):
@@ -131,7 +132,8 @@ class LargeDataset(Dataset):
 
         # Create a new graph and remove undesired attributes
         logger.debug(f"Cleaning data : {data}")
-        if not isinstance(data,Data): return data
+        if not isinstance(data, Data):
+            return data
         cleaned_data = Data()
         for key in data.keys():
             if key in (self.clean_keys):
@@ -236,7 +238,11 @@ class LazyDataset(Dataset):
                 if len(self.datalist) % self.batch_size > 0 and not self.drop_last
                 else 0
             )
-        self.size = len(datalist) - (len(datalist) % self.batch_size if self.drop_last else 0) if datalist is not None else 0
+        self.size = (
+            len(datalist) - (len(datalist) % self.batch_size if self.drop_last else 0)
+            if datalist is not None
+            else 0
+        )
         self.weights_only = weights_only
         self.process_batch_start_idx = 0
 
@@ -262,7 +268,9 @@ class LazyDataset(Dataset):
                         if self.size % self.batch_size > 0 and not self.drop_last
                         else 0
                     )
-                    self.process_batch_start_idx = metadata["num_batches"] - 1 #NOTE: This will be incremented below if the last batch is full.
+                    self.process_batch_start_idx = (
+                        metadata["num_batches"] - 1
+                    )  # NOTE: This will be incremented below if the last batch is full.
 
                     # Check that the number of data files and the number of batches are consistent
                     nfiles = len(glob(os.path.join(self.processed_dir, "data*.pt")))
@@ -298,7 +306,7 @@ class LazyDataset(Dataset):
                     self.datalist = []
                 self.datalist = [*_loaded_batch, *self.datalist]
             else:
-                self.process_batch_start_idx += 1 #NOTE: If last batch is full, increment the starting batch index.
+                self.process_batch_start_idx += 1  # NOTE: If last batch is full, increment the starting batch index.
 
         # (Re)create the metadata file
         os.makedirs(self.root, exist_ok=True)
@@ -331,7 +339,8 @@ class LazyDataset(Dataset):
 
         # Create a new graph and remove undesired attributes
         logger.debug(f"Cleaning data : {data}")
-        if not isinstance(data,Data): return data
+        if not isinstance(data, Data):
+            return data
         cleaned_data = Data()
         for key in data.keys():
             if key in (self.clean_keys):
@@ -356,8 +365,12 @@ class LazyDataset(Dataset):
 
         data = [self.clean_data(d) for d in data]
 
-        logger.info(f"Saving batch {idx + self.process_batch_start_idx} with {len(data)} graphs")
-        logger.info(f"Processed dir: {self.processed_dir}  File name: {self.processed_file_names[idx + self.process_batch_start_idx]}")
+        logger.info(
+            f"Saving batch {idx + self.process_batch_start_idx} with {len(data)} graphs"
+        )
+        logger.info(
+            f"Processed dir: {self.processed_dir}  File name: {self.processed_file_names[idx + self.process_batch_start_idx]}"
+        )
         torch.save(
             data,
             os.path.join(
