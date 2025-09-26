@@ -381,10 +381,10 @@ def pipeline_titok(
         {
             "train": train_logs,
             "src_val": [
-                el if type(el) != torch.Tensor else el.tolist() for el in src_val_logs
+                el if not isinstance(el, torch.Tensor) else el.tolist() for el in src_val_logs
             ],
-            "tgt_val_logs": [
-                el if type(el) != torch.Tensor else el.tolist() for el in src_val_logs
+            "tgt_val": [
+                el if not isinstance(el, torch.Tensor) else el.tolist() for el in tgt_val_logs
             ],
         },
     )
