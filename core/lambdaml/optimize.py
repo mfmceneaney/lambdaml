@@ -127,7 +127,7 @@ def objective(
     trial,
     wandb_project="wandb_project",
     metric_name="auc",
-    metric_fn=lambda logs: logs["auc"],
+    metric_fn=lambda logs: logs[0]["auc"],
     suggestion_rules=None,
     pipeline=pipeline_titok,
     pipeline_kwargs=None,

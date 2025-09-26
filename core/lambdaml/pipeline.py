@@ -107,7 +107,7 @@ def pipeline_titok(
     clf_params_path="clf_params.json",
     # Optuna trial
     trial=None,
-    metric_fn=lambda logs: logs[1]["auc"],  # Available logs are [train_logs, val_logs]
+    metric_fn=lambda logs: logs[0]["auc"],  # Available logs are [val_logs]
 ):
 
     # Check arguments

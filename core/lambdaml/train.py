@@ -192,7 +192,7 @@ def train_titok(
     device="cuda:0",
     verbose=True,
     trial=None,
-    metric_fn=lambda logs: logs[1]["auc"],  # Available logs are [train_logs, val_logs]
+    metric_fn=lambda logs: logs[0]["auc"],  # Available logs are [val_logs]
 ):
 
     # Create soft labels #NOTE: Pretrain first
@@ -353,7 +353,7 @@ def train_titok(
         if trial is not None:
 
             # Compute metric and report
-            metric = metric_fn([train_logs, val_logs])
+            metric = metric_fn([val_logs])
             logger.debug("Reporting metric to optuna trial: %f", metric)
             trial.report(metric, epoch)
 
