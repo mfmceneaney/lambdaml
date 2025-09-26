@@ -137,7 +137,7 @@ def val_titok(
     all_src_labels = torch.tensor(all_src_labels)
 
     logs = {
-        "auc": auc,
+        "auc": roc_auc,
         "loss": total_loss,
         "loss_cls": total_loss_cls,
         "loss_mmd": total_loss_mmd,
