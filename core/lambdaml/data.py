@@ -422,7 +422,7 @@ class LazyDataset(Dataset):
                     pool.join()
 
     def len(self):
-        return len(self.processed_file_names) * self.batch_size
+        return self.size
 
     def get(self, idx):
 
