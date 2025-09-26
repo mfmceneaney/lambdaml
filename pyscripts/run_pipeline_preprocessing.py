@@ -62,23 +62,23 @@ argparser.add_argument(
 )
 
 argparser.add_argument(
-     "--preprocessing_fn_kwargs",
+    "--preprocessing_fn_kwargs",
     type=json.loads,
-    default={},
+    default=None,
     help="Preprocessing function kwargs dictionary in JSON format, e.g., '{\"a\": 1, \"b\": 2}'"
 )
 
 argparser.add_argument(
-     "--labelling_fn_kwargs",
+    "--labelling_fn_kwargs",
     type=json.loads,
-    default={},
+    default=None,
     help="Labelling function kwargs dictionary in JSON format, e.g., '{\"a\": 1, \"b\": 2}'"
 )
 
 argparser.add_argument(
-     "--kinematics_fn_kwargs",
+    "--kinematics_fn_kwargs",
     type=json.loads,
-    default={},
+    default=None,
     help="Kinematics function kwargs dictionary in JSON format, e.g., '{\"a\": 1, \"b\": 2}'"
 )
 
@@ -156,7 +156,7 @@ for fn_name in fn_names:
         if args[fn_name+"_kwargs"] is not None:
             args[fn_name] = lambda x: fn_choices[arg_fn_name](x, **args[fn_name+"_kwargs"])
         else:
-            args[fn_name] = fn_choices[args_fn_name]
+            args[fn_name] = fn_choices[arg_fn_name]
 
 # Remove config argument
 args.pop("config")
