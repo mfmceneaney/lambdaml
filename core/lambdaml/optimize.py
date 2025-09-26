@@ -197,16 +197,16 @@ def objective(
             suggestions[key] = suggestion
 
     # Create a unique output directory for this trial
-    experiment_dir = (
+    experiment_dir = os.path.abspath(
         "experiments"
-        if "output_dir" not in pipeline_kwargs
-        else pipeline_kwargs["output_dir"]
+        if "out_dir" not in pipeline_kwargs
+        else pipeline_kwargs["out_dir"]
     )
     trial_id = str(uuid4())
-    output_dir = os.path.join(experiment_dir, trial_id)
-    os.makedirs(output_dir, exist_ok=True)
-    suggestions["output_dir"] = output_dir
-    trial.set_user_attr("output_dir", output_dir)
+    out_dir = os.path.join(experiment_dir, trial_id)
+    os.makedirs(out_dir, exist_ok=True)
+    suggestions["out_dir"] = out_dir
+    trial.set_user_attr("out_dir", out_dir)
     trial.set_user_attr("trial_id", trial_id)
 
     # Log to wandb
@@ -214,7 +214,7 @@ def objective(
         project=wandb_project,
         name=f"trial-{trial.number}",
         config=suggestions,
-        dir=str(output_dir),
+        dir=str(out_dir),
         reinit=False,
     )
 
