@@ -55,11 +55,11 @@ singularity build lambdaml-cu129.sif Singularity.def.cu129
 ```
 Then run the container, binding to some volumes on your cluster, with
 ```bash
-singularity exec -B /volatile,/path/to/lambdaml lambdaml-cu129.sif bash
+singularity exec -B /volatile,/path/to/lambdaml:/usr/src/lambdaml lambdaml-cu129.sif bash
 ```
 Or, if you just need to run a python script within the container
 ```bash
-singularity exec -B /volatile,/path/to/lambdaml lambdaml-cu129.sif python script.py --OPTION VALUE
+singularity exec -B /volatile,/path/to/lambdaml:/usr/src/lambdaml lambdaml-cu129.sif python3 /usr/src/lambdaml/pyscripts/<SCRIPT>.py --help
 ```
 
 </details>
@@ -121,7 +121,7 @@ cd
 ## :green_circle: Getting Started
 Run the project pipelines for dataset creation, hyperparameter optimization, model selection, and model deployment in [pyscripts](pyscripts/).
 ```bash
-python3 pyscripts/<some_script.py>
+python3 pyscripts/<some_script.py> --help
 ```
 
 #
