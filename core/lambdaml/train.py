@@ -354,7 +354,7 @@ def train_titok(
 
             # Compute metric and report
             metric = metric_fn([train_logs, val_logs])
-            logger.info("Reporting metric to optuna trial: %f", metric)
+            logger.debug("Reporting metric to optuna trial: %f", metric)
             trial.report(metric, epoch)
 
             # Handle pruning based on the intermediate value.
