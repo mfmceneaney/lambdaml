@@ -508,7 +508,6 @@ def pipeline_titok(
 
     # Save and show plot
     logger.info("Saving training metrics figure")
-    plt.show()
     plt.tight_layout()
     fig.savefig(osp.join(out_dir, metrics_plot_path), bbox_inches="tight")
 
