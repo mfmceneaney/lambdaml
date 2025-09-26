@@ -48,7 +48,7 @@ class SmallDataset(InMemoryDataset):
     def clean_data(self, data):
 
         # Create a new graph and remove undesired attributes
-        logger.debug(f"Cleaning data : {data}")
+        logger.debug("Cleaning data : %s", data)
         if not isinstance(data, Data):
             return data
         cleaned_data = Data()
@@ -131,7 +131,7 @@ class LargeDataset(Dataset):
     def clean_data(self, data):
 
         # Create a new graph and remove undesired attributes
-        logger.debug(f"Cleaning data : {data}")
+        logger.debug("Cleaning data : %s", data)
         if not isinstance(data, Data):
             return data
         cleaned_data = Data()
@@ -338,7 +338,7 @@ class LazyDataset(Dataset):
     def clean_data(self, data):
 
         # Create a new graph and remove undesired attributes
-        logger.debug(f"Cleaning data : {data}")
+        logger.debug("Cleaning data : %s", data)
         if not isinstance(data, Data):
             return data
         cleaned_data = Data()
@@ -366,10 +366,14 @@ class LazyDataset(Dataset):
         data = [self.clean_data(d) for d in data]
 
         logger.info(
-            f"Saving batch {idx + self.process_batch_start_idx} with {len(data)} graphs"
+            "Saving batch %d with %d graphs",
+            idx + self.process_batch_start_idx,
+            len(data),
         )
         logger.info(
-            f"Processed dir: {self.processed_dir}  File name: {self.processed_file_names[idx + self.process_batch_start_idx]}"
+            "Processed dir: %s  File name: %s",
+            self.processed_dir,
+            self.processed_file_names[idx + self.process_batch_start_idx],
         )
         torch.save(
             data,

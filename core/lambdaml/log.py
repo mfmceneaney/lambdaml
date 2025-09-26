@@ -22,7 +22,7 @@ def set_global_log_level(level_str: str):
     level = getattr(logging, level_str.upper(), logging.INFO)
 
     # Update all existing loggers
-    logger_dict = logging.root.manager.loggerDict
-    for name, logger in logger_dict.items():
+    logger_dict = logging.Logger.manager.loggerDict
+    for _, logger in logger_dict.items():
         if isinstance(logger, logging.Logger):
             logger.setLevel(level)

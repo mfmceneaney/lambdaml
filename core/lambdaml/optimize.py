@@ -103,10 +103,10 @@ def parse_suggestion_rule(s):
         if len(parts) == 4 and parts[3]:
             try:
                 step = float(parts[3])
-            except ValueError:
+            except ValueError as exc:
                 raise argparse.ArgumentTypeError(
                     f"Invalid step value in float rule: {parts[3]}"
-                )
+                ) from exc
 
         return {name: {"type": "float", "range": (low, high), "log": log, "step": step}}
 

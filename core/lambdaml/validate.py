@@ -227,7 +227,7 @@ def val_titok(
 
 
 def get_auc(labels, probs):
-    fpr, tpr, thresholds = roc_curve(labels, probs)
+    fpr, tpr, _ = roc_curve(labels, probs)
     auc_score = auc(fpr, tpr)
     return auc_score
 
