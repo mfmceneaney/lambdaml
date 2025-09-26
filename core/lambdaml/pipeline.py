@@ -474,9 +474,6 @@ def pipeline_titok(
     # Plot training and validation accuracies
     train_accs = [train_logs[key] for key in train_logs if "train_acc" in key]
     val_accs = [train_logs[key] for key in train_logs if "val_acc" in key]
-    print(train_logs.keys())
-    print([key for key in train_logs if "train_acc" in key])
-    print([key for key in train_logs if "val_acc" in key])
     accs = [*train_accs, *val_accs]
     train_accs_kwargs = [{"label": key} for key in train_logs if "train_acc" in key]
     val_accs_kwargs = [
