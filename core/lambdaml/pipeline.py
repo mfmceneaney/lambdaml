@@ -158,7 +158,7 @@ def pipeline_titok(
             src_ds = SmallDataset(
                 src_root_exp, transform=transform, pre_transform=None, pre_filter=None
             )
-            logger.info("Loading target SmallDataset: %s", src_root_exp)
+            logger.info("Loading target SmallDataset: %s", tgt_root_exp)
             tgt_ds = SmallDataset(
                 tgt_root_exp, transform=transform, pre_transform=None, pre_filter=None
             )
@@ -168,7 +168,7 @@ def pipeline_titok(
             src_ds = LazyDataset(
                 src_root_exp, transform=transform, pre_transform=None, pre_filter=None
             )
-            logger.info("Loading target LazyDataset: %s", src_root_exp)
+            logger.info("Loading target LazyDataset: %s", tgt_root_exp)
             tgt_ds = LazyDataset(
                 tgt_root_exp, transform=transform, pre_transform=None, pre_filter=None
             )
@@ -179,28 +179,43 @@ def pipeline_titok(
         tgt_ds = tgt_ds[0:max_idx]
 
     # Split datasets
+    logger.info("Splitting datasets with ratio: %s", ds_split)
     src_train_ds, src_val_ds = random_split(src_ds, ds_split)
     tgt_train_ds, tgt_val_ds = random_split(tgt_ds, ds_split)
+    logger.debug("len(src_train_ds) = %d", len(src_train_ds))
+    logger.debug("len(src_val_ds) = %d", len(src_val_ds))
+    logger.debug("len(tgt_train_ds) = %d", len(tgt_train_ds))
+    logger.debug("len(tgt_val_ds) = %d", len(tgt_val_ds))
+    logger.debug("src_train_ds[0] = %s", src_train_ds[0] if len(src_train_ds) > 0 else None)
+    logger.debug("tgt_train_ds[0] = %s", tgt_train_ds[0] if len(tgt_train_ds) > 0 else None)
+    logger.debug("src_val_ds[0] = %s", src_val_ds[0] if len(src_val_ds) > 0 else None)
+    logger.debug("tgt_val_ds[0] = %s", tgt_val_ds[0] if len(tgt_val_ds) > 0 else None)
 
     # Create DataLoaders
     logger.info("Creating source training DataLoader")
     src_train_loader = DataLoader(
         src_train_ds, batch_size=batch_size, shuffle=True, drop_last=drop_last
     )
+    logger.debug("len(src_train_loader) = %d", len(src_train_loader))
+
     logger.info("Creating target training DataLoader")
     tgt_train_loader = DataLoader(
         tgt_train_ds, batch_size=batch_size, shuffle=True, drop_last=drop_last
     )
+    logger.debug("len(tgt_train_loader) = %d", len(tgt_train_loader))
 
     # Create DataLoaders
     logger.info("Creating source validation DataLoader")
     src_val_loader = DataLoader(
         src_val_ds, batch_size=batch_size, shuffle=False, drop_last=drop_last
     )
+    logger.debug("len(src_train_loader) = %d", len(src_train_loader))
+    
     logger.info("Creating target validation DataLoader")
     tgt_val_loader = DataLoader(
         tgt_val_ds, batch_size=batch_size, shuffle=False, drop_last=drop_last
     )
+    logger.debug("len(tgt_val_loader) = %d", len(tgt_val_loader))
 
     # --------------------------------------------------------#
     # Create model
@@ -237,6 +252,7 @@ def pipeline_titok(
         lr_scheduler = LambdaLR(optimizer, lr_lambda)
 
     # ----- Train model
+    logger.info("Training model")
     train_logs, soft_labels = train_titok(
         encoder,
         clf,
