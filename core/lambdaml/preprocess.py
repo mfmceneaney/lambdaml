@@ -537,7 +537,7 @@ def label_rec_particle(data_event_tables, decay=(3122, (2212, -211))):
     # Return zero vector if information not available
     if (
         not rec_particle_bank_name in data_event_tables
-        and mc_lund_bank_name in data_event_tables
+        or not mc_lund_bank_name in data_event_tables
     ):
         return torch.tensor([0], dtype=torch.long)
 
