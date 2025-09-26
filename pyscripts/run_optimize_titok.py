@@ -5,6 +5,7 @@ import argparse
 import torch
 import torch_geometric.transforms as T
 from torch.optim.lr_scheduler import StepLR
+import os
 
 # Local imports
 from lambdaml.pipeline import pipeline_titok
@@ -517,6 +518,20 @@ argparser.add_argument(
     help="Optuna pruner kwargs dict in JSON format, e.g., '{\"arg1\": val1, \"arg2\": val2}'",
 )
 
+argparser.add_argument(
+    "--wandb_mode",
+    type=str,
+    default="offline",
+    help="WANDB_MODE environment variable for wandb project mode",
+)
+
+argparser.add_argument(
+    "--wandb_dir",
+    type=str,
+    default="wandb_logs",
+    help="WANDB_DIR environment variable for path wandb logs directory",
+)
+
 # Parse arguments and initialize argument dictionary
 args_raw = argparser.parse_args()
 args = {}
@@ -532,6 +547,13 @@ else:
 # Set log level
 set_global_log_level(args["log_level"])
 args.pop("log_level")
+
+# Pop wandb specific arguments and set as environment variables
+args_keys = list(args.keys())
+for key in args_keys:
+    if key.startswith("wandb"):
+        val = args.pop(key)
+        os.environ[key.upper()] = val
 
 # Pop optuna specific arguments removing "opt__" prefix
 opt_args = {}
