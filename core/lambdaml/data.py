@@ -51,7 +51,7 @@ class SmallDataset(InMemoryDataset):
         logger.debug(f"Cleaning data : {data}")
         if not isinstance(data,Data): return data
         cleaned_data = Data()
-        for key in data:
+        for key in data.keys():
             if key in (self.clean_keys):
                 continue
             value = getattr(data, key)
@@ -133,7 +133,7 @@ class LargeDataset(Dataset):
         logger.debug(f"Cleaning data : {data}")
         if not isinstance(data,Data): return data
         cleaned_data = Data()
-        for key in data:
+        for key in data.keys():
             if key in (self.clean_keys):
                 continue
             value = getattr(data, key)
@@ -333,7 +333,7 @@ class LazyDataset(Dataset):
         logger.debug(f"Cleaning data : {data}")
         if not isinstance(data,Data): return data
         cleaned_data = Data()
-        for key in data:
+        for key in data.keys():
             if key in (self.clean_keys):
                 continue
             value = getattr(data, key)

@@ -1,6 +1,7 @@
 # PIPELINE
 # pylint: disable=no-member
 import torch
+from torch_geometric.data import Data
 from torch_geometric.datasets import TUDataset
 from torch_geometric.loader import DataLoader
 from torch.optim.lr_scheduler import StepLR, LambdaLR
@@ -687,14 +688,17 @@ def pipeline_preprocessing(
             }
 
             # Preprocess graph
-            data = None
+            x, edge_index = None, None
             if callable(preprocessing_fn):
-                data = preprocessing_fn(data_event_tables, **preprocessing_fn_kwargs)
+                x, edge_index = preprocessing_fn(data_event_tables, **preprocessing_fn_kwargs)
             else:
                 raise TypeError(
                     "Preprocessing function must be calllable, but found type(preprocessing_fn) =",
                     type(preprocessing_fn),
                 )
+
+            # Create data from x, edge_index
+            data = Data(x=x, edge_index=edge_index)
 
             # Label graph
             if labelling_fn is not None and callable(labelling_fn):
