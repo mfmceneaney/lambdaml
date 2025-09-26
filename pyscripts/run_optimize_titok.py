@@ -535,7 +535,8 @@ args.pop("log_level")
 
 # Pop optuna specific arguments removing "opt__" prefix
 opt_args = {}
-for key in args:
+args_keys = list(args.keys())
+for key in args_keys:
     if key.startswith("opt__"):
         opt_args["".join(key.split("opt__")[1])] = args.pop(key)
 
