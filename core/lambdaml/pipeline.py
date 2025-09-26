@@ -644,7 +644,7 @@ def pipeline_titok(
     ]
     paths = [osp.join(out_dir, path) for path in paths]
 
-    return roc_info, src_val_logs, tgt_val_logs, paths
+    return src_val_logs, tgt_val_logs, roc_info, paths
 
 
 def pipeline_preprocessing(
