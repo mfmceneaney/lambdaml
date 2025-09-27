@@ -441,12 +441,23 @@ argparser.add_argument(
     "--opt__metric_fn",
     type=str,
     default="auc",
-    choices=["auc"],
+    choices=[
+        "auc",
+        "best_fpr",
+        "best_tpr",
+        "best_fom",
+        "best_thr",
+        "loss",
+        "loss_cls",
+        "loss_mmd",
+        "loss_auc",
+        "loss_soft",
+        "acc_raw",
+        "acc_per_class",
+        "acc_balanced",
+    ],
     help="Metric name to optimize",
 )
-metric_fn_choices = {
-    "auc": lambda logs: logs[0]["auc"],
-}
 
 argparser.add_argument(
     "--opt__suggestion_rules",
@@ -574,7 +585,7 @@ opt_args["suggestion_rules"] = suggestion_rules
 opt_args["pipeline"] = pipeline_choices[opt_args["pipeline"]]
 
 # Parse metric function choice
-opt_args["metric_fn"] = metric_fn_choices[opt_args["metric_fn"]]
+opt_args["metric_fn"] = lambda logs: logs[0][opt_args["metric_fn"]]
 
 # Replace values in args that are aliases for complex classes
 args["transform"] = transform_choices[args["transform"]] if args["transform"] is not None else None
