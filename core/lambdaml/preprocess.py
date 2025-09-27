@@ -514,9 +514,14 @@ def preprocess_rec_particle(
 
     # Define edge index
     num_nodes = len(x)
-    edge_index = torch.swapaxes(torch.tensor(
-        [[i, j] for i in range(num_nodes) for j in range(num_nodes)], dtype=torch.long
-    ), 0, 1) #NOTE: Shape should be [2,num_edges]
+    edge_index = torch.swapaxes(
+        torch.tensor(
+            [[i, j] for i in range(num_nodes) for j in range(num_nodes)],
+            dtype=torch.long,
+        ),
+        0,
+        1,
+    )  # NOTE: Shape should be [2,num_edges]
 
     return x, edge_index
 
@@ -661,8 +666,12 @@ def get_edge_index_rec_traj(x):
 
     logger.debug("link_indices = %s", link_indices)
 
-    edge_index = torch.swapaxes(torch.tensor(
-        [[i, j] for el_ in link_indices for i in el_ for j in el_], dtype=torch.long
-    ), 0, 1) #NOTE: Shape should be [2,num_edges]
+    edge_index = torch.swapaxes(
+        torch.tensor(
+            [[i, j] for el_ in link_indices for i in el_ for j in el_], dtype=torch.long
+        ),
+        0,
+        1,
+    )  # NOTE: Shape should be [2,num_edges]
 
     return edge_index

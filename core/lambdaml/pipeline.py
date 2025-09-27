@@ -187,8 +187,12 @@ def pipeline_titok(
     logger.debug("len(src_val_ds) = %d", len(src_val_ds))
     logger.debug("len(tgt_train_ds) = %d", len(tgt_train_ds))
     logger.debug("len(tgt_val_ds) = %d", len(tgt_val_ds))
-    logger.debug("src_train_ds[0] = %s", src_train_ds[0] if len(src_train_ds) > 0 else None)
-    logger.debug("tgt_train_ds[0] = %s", tgt_train_ds[0] if len(tgt_train_ds) > 0 else None)
+    logger.debug(
+        "src_train_ds[0] = %s", src_train_ds[0] if len(src_train_ds) > 0 else None
+    )
+    logger.debug(
+        "tgt_train_ds[0] = %s", tgt_train_ds[0] if len(tgt_train_ds) > 0 else None
+    )
     logger.debug("src_val_ds[0] = %s", src_val_ds[0] if len(src_val_ds) > 0 else None)
     logger.debug("tgt_val_ds[0] = %s", tgt_val_ds[0] if len(tgt_val_ds) > 0 else None)
 
@@ -211,7 +215,7 @@ def pipeline_titok(
         src_val_ds, batch_size=batch_size, shuffle=False, drop_last=drop_last
     )
     logger.debug("len(src_train_loader) = %d", len(src_train_loader))
-    
+
     logger.info("Creating target validation DataLoader")
     tgt_val_loader = DataLoader(
         tgt_val_ds, batch_size=batch_size, shuffle=False, drop_last=drop_last
@@ -382,10 +386,12 @@ def pipeline_titok(
         {
             "train": train_logs,
             "src_val": [
-                el if not isinstance(el, torch.Tensor) else el.tolist() for el in src_val_logs
+                el if not isinstance(el, torch.Tensor) else el.tolist()
+                for el in src_val_logs
             ],
             "tgt_val": [
-                el if not isinstance(el, torch.Tensor) else el.tolist() for el in tgt_val_logs
+                el if not isinstance(el, torch.Tensor) else el.tolist()
+                for el in tgt_val_logs
             ],
         },
     )
