@@ -158,7 +158,7 @@ You can then run the TIToK training script like so:
 ```bash
 singularity exec \
 -B $VOLATILE_DIR,$LAMBDAML_HOME:/usr/src/lambdaml lambdaml-cu129.sif \
-python3 /usr/src/lambdaml/pyscripts/run_optimize_titok.py \
+python3 /usr/src/lambdaml/pyscripts/run_pipeline_titok.py \
 --src_root $VOLATILE_DIR/src_dataset \
 --tgt_root $VOLATILE_DIR/tgt_dataset \
 --out_dir $VOLATILE_DIR/experiments \
