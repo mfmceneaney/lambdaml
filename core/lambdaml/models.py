@@ -142,10 +142,10 @@ class DomainDiscriminator(nn.Module):
 
 # Projection head for contrastive loss
 class ProjectionHead(nn.Module):
-    def __init__(self, in_dim, proj_dim):
+    def __init__(self, in_dim=64, out_dim=32):
         super().__init__()
         self.proj = nn.Sequential(
-            nn.Linear(in_dim, proj_dim), nn.ReLU(), nn.Linear(proj_dim, proj_dim)
+            nn.Linear(in_dim, out_dim), nn.ReLU(), nn.Linear(out_dim, out_dim)
         )
 
     def forward(self, x):
