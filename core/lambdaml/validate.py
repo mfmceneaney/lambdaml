@@ -6,12 +6,266 @@ import torch.nn.functional as F
 from sklearn.metrics import roc_curve, auc
 
 # Local imports
-from .functional import loss_titok
+from .functional import (
+    loss_da,
+    loss_can,
+    loss_titok,
+)
 from .log import setup_logger
 
 
 # Set module logger
 logger = setup_logger(__name__)
+
+
+def val_da(
+    encoder,
+    clf,
+    disc,
+    optimizer,
+    src_val_loader,
+    tgt_val_loader,
+    return_labels=True,
+    num_classes=2,
+    sg_idx=1,
+    alpha=0.5,
+    device="cuda:0",
+):
+
+    # Set models in eval mode
+    encoder.eval()
+    clf.eval()
+    disc.eval()
+
+    # Initialize variables
+    total_loss = 0
+    total_loss_cls = 0
+    total_loss_disc = 0
+    correct = 0
+    total = 0
+    all_src_probs = []
+    all_src_preds = []
+    all_src_labels = []
+    correct_per_class = torch.zeros(num_classes).to(device)
+    total_per_class = torch.zeros(num_classes).to(device)
+
+    # Iterate over source and target loaders in parallel
+    with torch.no_grad():
+        for src_batch, tgt_batch in zip(src_val_loader, tgt_val_loader):
+
+            # Reset gradients
+            optimizer.zero_grad()
+
+            # Source graph forward pass
+            logger.debug("src_batch = %s", src_batch)
+            src_batch = src_batch.to(device)
+            src_feats = encoder(src_batch.x, src_batch.edge_index, src_batch.batch)
+            src_logits = clf(src_feats)
+            src_probs = F.softmax(src_logits, dim=1)
+            src_preds = src_probs.argmax(dim=1)
+            src_labels = src_batch.y
+
+            # Target graph forward pass
+            logger.debug("tgt_batch = %s", tgt_batch)
+            tgt_batch = tgt_batch.to(device)
+            tgt_feats = encoder(tgt_batch.x, tgt_batch.edge_index, tgt_batch.batch)
+
+            # Source + Target forward pass on discriminator
+            dom_feats = torch.cat([src_feats, tgt_feats], dim=0)
+            dom_logits = disc(dom_feats, alpha)
+            dom_labels = torch.cat(
+                [
+                    torch.zeros(src_feats.size(0), dtype=torch.long),
+                    torch.ones(tgt_feats.size(0), dtype=torch.long),
+                ],
+                dim=0,
+            ).to(device)
+
+            # Compute loss
+            loss, loss_cls, loss_disc = loss_da(
+                src_logits,
+                src_labels,
+                dom_logits,
+                dom_labels,
+            )
+            logger.debug("loss_da = %s", loss)
+
+            # Pop losses
+            total_loss += loss.item()
+            total_loss_cls += loss_cls.item()
+            total_loss_disc += loss_disc.item()
+
+            # Compute ROC curve and AUC
+            roc_info, _ = get_best_threshold(
+                src_labels, src_probs[:, sg_idx], return_arrays=False
+            )
+            logger.debug("roc_info = %s", roc_info)
+
+            # Count correct predictions
+            correct += (src_preds == src_labels).sum().item()
+            total += src_labels.size(0)
+            if return_labels:
+                all_src_probs.extend(src_probs.cpu().tolist())
+                all_src_preds.extend(src_preds.cpu().tolist())
+                all_src_labels.extend(src_labels.cpu().tolist())
+
+            for i in range(len(src_preds)):
+                label = src_labels[i]
+                total_per_class[label] += 1
+                if src_preds[i] == label:
+                    correct_per_class[label] += 1
+
+    # Compute per-class accuracies, avoiding division by zero
+    acc_per_class = correct_per_class / (total_per_class + 1e-8)
+
+    # Compute average per-class accuracy
+    valid_class_mask = total_per_class > 0
+    acc_balanced = acc_per_class[valid_class_mask].mean().item()
+
+    # Compute raw accuracy
+    acc_raw = correct / total
+
+    # Convert lists to torch tensors
+    all_src_probs = torch.tensor(all_src_probs)
+    all_src_preds = torch.tensor(all_src_preds)
+    all_src_labels = torch.tensor(all_src_labels)
+
+    logs = {
+        **roc_info,
+        "loss": total_loss,
+        "loss_cls": total_loss_cls,
+        "loss_disc": total_loss_disc,
+        "acc_raw": acc_raw,
+        "acc_per_class": acc_per_class.cpu().tolist(),
+        "acc_balanced": acc_balanced,
+        "probs": all_src_probs,
+        "preds": all_src_preds,
+        "labels": all_src_labels,
+    }
+
+    return logs
+
+
+def val_can(
+    encoder,
+    clf,
+    projector,
+    optimizer,
+    src_val_loader,
+    tgt_val_loader,
+    return_labels=True,
+    num_classes=2,
+    sg_idx=1,
+    temp=2.0,
+    alpha=0.5,
+    device="cuda:0",
+):
+
+    # Set models in eval mode
+    encoder.eval()
+    clf.eval()
+    projector.eval()
+
+    # Initialize variables
+    total_loss = 0
+    total_loss_cls = 0
+    total_loss_con = 0
+    correct = 0
+    total = 0
+    all_src_probs = []
+    all_src_preds = []
+    all_src_labels = []
+    correct_per_class = torch.zeros(num_classes).to(device)
+    total_per_class = torch.zeros(num_classes).to(device)
+
+    # Iterate over source and target loaders in parallel
+    with torch.no_grad():
+        for src_batch, tgt_batch in zip(src_val_loader, tgt_val_loader):
+
+            # Reset gradients
+            optimizer.zero_grad()
+
+            # Source graph forward pass
+            logger.debug("src_batch = %s", src_batch)
+            src_batch = src_batch.to(device)
+            src_feats = encoder(src_batch.x, src_batch.edge_index, src_batch.batch)
+            src_logits = clf(src_feats)
+            src_probs = F.softmax(src_logits, dim=1)
+            src_preds = src_probs.argmax(dim=1)
+            src_projs = projector(src_feats)
+            src_labels = src_batch.y
+
+            # Target graph forward pass
+            logger.debug("tgt_batch = %s", tgt_batch)
+            tgt_batch = tgt_batch.to(device)
+            tgt_feats = encoder(tgt_batch.x, tgt_batch.edge_index, tgt_batch.batch)
+            tgt_projs = projector(tgt_feats)
+
+            # Compute loss
+            loss, loss_cls, loss_con = loss_can(
+                src_logits,
+                src_labels,
+                src_projs,
+                tgt_projs,
+                alpha=alpha,
+                temp=temp,
+            )
+            logger.debug("loss_can = %s", loss)
+
+            # Pop losses
+            total_loss += loss.item()
+            total_loss_cls += loss_cls.item()
+            total_loss_con += loss_con.item()
+
+            # Compute ROC curve and AUC
+            roc_info, _ = get_best_threshold(
+                src_labels, src_probs[:, sg_idx], return_arrays=False
+            )
+            logger.debug("roc_info = %s", roc_info)
+
+            # Count correct predictions
+            correct += (src_preds == src_labels).sum().item()
+            total += src_labels.size(0)
+            if return_labels:
+                all_src_probs.extend(src_probs.cpu().tolist())
+                all_src_preds.extend(src_preds.cpu().tolist())
+                all_src_labels.extend(src_labels.cpu().tolist())
+
+            for i in range(len(src_preds)):
+                label = src_labels[i]
+                total_per_class[label] += 1
+                if src_preds[i] == label:
+                    correct_per_class[label] += 1
+
+    # Compute per-class accuracies, avoiding division by zero
+    acc_per_class = correct_per_class / (total_per_class + 1e-8)
+
+    # Compute average per-class accuracy
+    valid_class_mask = total_per_class > 0
+    acc_balanced = acc_per_class[valid_class_mask].mean().item()
+
+    # Compute raw accuracy
+    acc_raw = correct / total
+
+    # Convert lists to torch tensors
+    all_src_probs = torch.tensor(all_src_probs)
+    all_src_preds = torch.tensor(all_src_preds)
+    all_src_labels = torch.tensor(all_src_labels)
+
+    logs = {
+        **roc_info,
+        "loss": total_loss,
+        "loss_cls": total_loss_cls,
+        "loss_con": total_loss_con,
+        "acc_raw": acc_raw,
+        "acc_per_class": acc_per_class.cpu().tolist(),
+        "acc_balanced": acc_balanced,
+        "probs": all_src_probs,
+        "preds": all_src_preds,
+        "labels": all_src_labels,
+    }
+
+    return logs
 
 
 def val_titok(
@@ -104,7 +358,9 @@ def val_titok(
             total_loss_soft += loss_soft.item()
 
             # Compute ROC curve and AUC
-            roc_info, _ = get_best_threshold(src_labels, src_probs[:, sg_idx], return_arrays=False)
+            roc_info, _ = get_best_threshold(
+                src_labels, src_probs[:, sg_idx], return_arrays=False
+            )
             logger.debug("roc_info = %s", roc_info)
 
             # Count correct predictions
@@ -154,78 +410,6 @@ def val_titok(
     return logs
 
 
-# def eval_disc(src_loader, tgt_loader, return_labels=False):
-
-#     # Set models to evaluation mode
-#     encoder.eval()
-#     disc.eval()
-
-#     # Initialize variables and arrays
-#     loss = 0
-#     correct = 0
-#     total = 0
-#     probs = []
-#     preds = []
-#     labels = []
-
-#     # Loop source and target domain data
-#     with torch.no_grad():
-#         for src_batch, tgt_batch in zip(src_loader, tgt_loader):
-
-#             # Get source batch embedding and logits
-#             src_batch = src_batch.to(device)
-#             src_feats = encoder(src_batch.x, src_batch.edge_index, src_batch.batch)
-#             src_logits = disc(src_feats)
-
-#             # Get target batch embedding and logits
-#             tgt_batch = tgt_batch.to(device)
-#             tgt_feats = encoder(tgt_batch.x, tgt_batch.edge_index, tgt_batch.batch)
-#             tgt_logits = disc(tgt_feats)
-
-#             # Get domain classification predictions and loss
-#             dom_feats = torch.cat([src_feats, tgt_feats], dim=0)
-#             dom_labels = torch.cat(
-#                 [
-#                     torch.zeros(src_feats.size(0), dtype=torch.long),
-#                     torch.ones(tgt_feats.size(0), dtype=torch.long),
-#                 ],
-#                 dim=0,
-#             ).to(device)
-#             dom_logits = disc(dom_feats, alpha=alpha)
-#             dom_loss = F.cross_entropy(dom_logits, dom_labels)
-#             dom_probs = F.softmax(dom_logits, dim=0)
-#             dom_preds = dom_probs.argmax(dim=1)
-
-#             # Record total loss
-#             loss += dom_loss.item()
-
-#             # Record domain correct predictions, logits, and labels
-#             correct += (dom_preds == dom_labels).sum().item()
-#             total += dom_labels.size(0)
-#             if return_labels:
-#                 probs.extend(dom_probs.cpu().tolist())
-#                 preds.extend(dom_preds.cpu().tolist())
-#                 labels.extend(dom_labels.cpu().tolist())
-
-#         # Compute accuracy
-#         acc = correct / total
-
-#         # Convert lists to torch tensors
-#         probs = torch.tensor(probs)
-#         preds = torch.tensor(preds)
-#         labels = torch.tensor(labels)
-
-#     logs = {
-#         "loss": loss,
-#         "acc": acc,
-#         "probs": probs,
-#         "preds": preds,
-#         "dom_labels": dom_labels,
-#     }
-
-#     return logs
-
-
 def get_auc(labels, probs):
     fpr, tpr, _ = roc_curve(labels, probs)
     auc_score = auc(fpr, tpr)
@@ -235,7 +419,7 @@ def get_auc(labels, probs):
 def get_best_threshold(labels, probs, return_arrays=True):
 
     # Check arguments
-    if torch.sum(src_labels) > 0:
+    if torch.sum(labels) > 0:
         return {
             "auc": 0.0,
             "best_fpr": 0.0,

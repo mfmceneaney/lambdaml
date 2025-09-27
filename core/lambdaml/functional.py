@@ -28,11 +28,28 @@ def linear_decay(epoch, nepochs, t_min=0.07, t_max=0.5):
     return t_min + (t_max - t_min) * (1 - epoch / nepochs)
 
 
-def contrastive_loss(z1, z2, temperature=0.5):
+def loss_da(src_logits, src_labels, dom_logits, dom_labels):
+
+    # Compute the classifier loss
+    loss_clf = F.cross_entropy(src_logits, src_labels)
+
+    # Compute the domain classification loss (labels: 0 for source, 1 for target)
+    loss_dom = F.cross_entropy(dom_logits, dom_labels)
+
+    # Compute the total loss
+    loss = loss_clf + loss_dom
+
+    return loss, loss_clf, loss_dom
+
+
+def loss_can(src_out, src_labels, src_projs, tgt_projs, alpha=0.1, temp=0.5):
+
+    # Compute the classifier loss
+    loss_clf = F.cross_entropy(src_out, src_labels)
 
     # Compute the contrastive loss: NT-Xent (simplified)
-    z1 = F.normalize(z1, dim=1)
-    z2 = F.normalize(z2, dim=1)
+    z1 = F.normalize(src_projs, dim=1)
+    z2 = F.normalize(tgt_projs, dim=1)
     batch_size = z1.size(0)
 
     representations = torch.cat([z1, z2], dim=0)
@@ -42,13 +59,17 @@ def contrastive_loss(z1, z2, temperature=0.5):
     sim_ji = torch.diag(similarity, -batch_size)
     positives = torch.cat([sim_ij, sim_ji], dim=0)
 
-    nominator = torch.exp(positives / temperature)
-    denominator = torch.sum(torch.exp(similarity / temperature), dim=1) - torch.exp(
-        torch.ones_like(positives) / temperature
+    nominator = torch.exp(positives / temp)
+    denominator = torch.sum(torch.exp(similarity / temp), dim=1) - torch.exp(
+        torch.ones_like(positives) / temp
     )
-    loss = -torch.log(nominator / denominator)
+    loss_con = -torch.log(nominator / denominator)
+    loss_con = loss_con.mean()
 
-    return loss.mean()
+    # Compute the total loss
+    loss = loss_clf + alpha * loss_con
+
+    return loss, loss_clf, loss_con
 
 
 # ----- TIToK Loss definitions -----#

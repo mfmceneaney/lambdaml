@@ -1,11 +1,22 @@
 # TRAIN
 # pylint: disable=no-member
 from tqdm import tqdm
+import torch
 import optuna
 
 # Local imports
-from .functional import sigmoid_growth, gen_soft_labels, loss_titok
-from .validate import val_titok
+from .functional import (
+    sigmoid_growth,
+    gen_soft_labels,
+    loss_da,
+    loss_can,
+    loss_titok,
+)
+from .validate import (
+    val_da,
+    val_can,
+    val_titok,
+)
 from .log import setup_logger
 
 
@@ -13,159 +24,336 @@ from .log import setup_logger
 logger = setup_logger(__name__)
 
 
-# def train(epochs=100, alpha_fn=0.1):
-#     encoder.train()
-#     clf.train()
-#     disc.train()
+def train_da(
+    encoder,
+    clf,
+    disc,
+    optimizer,
+    src_train_loader,
+    tgt_train_loader,
+    src_val_loader,
+    tgt_val_loader,
+    num_classes=2,
+    sg_idx=1,
+    nepochs=100,
+    lr_scheduler=None,
+    alpha_fn=0.1,
+    device="cuda:0",
+    verbose=True,
+    trial=None,
+    metric_fn=lambda logs: logs[0]["auc"],  # Available logs are [val_logs]
+):
 
-#     # Set logging lists to return
-#     clf_losses = []
-#     dom_losses = []
-#     clf_accs = []
-#     lrs = []
+    # Set models in train mode
+    encoder.train()
+    clf.train()
+    disc.train()
 
-#     # Loop training epochs
-#     for epoch in range(1, epochs + 1):
+    # Set logging lists to return
+    logs = {}
+    logs["train_aucs"] = []
+    logs["train_losses"] = []
+    logs["train_losses_cls"] = []
+    logs["train_losses_disc"] = []
+    logs["train_accs_raw"] = []
+    logs["train_accs_per_class"] = []
+    logs["train_accs_balanced"] = []
+    logs["val_aucs"] = []
+    logs["val_losses"] = []
+    logs["val_losses_cls"] = []
+    logs["val_losses_disc"] = []
+    logs["val_accs_raw"] = []
+    logs["val_accs_per_class"] = []
+    logs["val_accs_balanced"] = []
+    logs["lrs"] = []
 
-#         # Check alpha function
-#         if callable(alpha_fn):
-#             alpha = alpha_fn(epoch, epochs)
-#         else:
-#             alpha = alpha_fn
+    # Loop training epochs
+    for epoch in tqdm(range(1, nepochs + 1)):
 
-#         total_clf_loss = 0
-#         total_domain_loss = 0
-#         # Parallel iteration over source and target loaders
-#         for src_batch, tgt_batch in zip(src_loader, tgt_loader):
-#             optimizer.zero_grad()
+        # Check alpha function
+        if callable(alpha_fn):
+            alpha = alpha_fn(epoch, nepochs)
+        else:
+            alpha = alpha_fn
 
-#             # Source graph forward pass
-#             src_batch = src_batch.to(device)
-#             src_emb = encoder(src_batch.x, src_batch.edge_index, src_batch.batch)
-#             src_out = clf(src_emb)
-#             src_loss = F.cross_entropy(src_out, src_batch.y)
+        # Iterate over source and target loaders in parallel
+        for src_batch, tgt_batch in zip(src_train_loader, tgt_train_loader):
 
-#             # Target graph forward pass
-#             tgt_batch = tgt_batch.to(device)
-#             tgt_emb = encoder(tgt_batch.x, tgt_batch.edge_index, tgt_batch.batch)
+            # Reset gradients
+            optimizer.zero_grad()
 
-#             # Domain classification loss (labels: 0 for source, 1 for target)
-#             domain_emb = torch.cat([src_emb, tgt_emb], dim=0)
-#             domain_labels = torch.cat(
-#                 [
-#                     torch.zeros(src_emb.size(0), dtype=torch.long),
-#                     torch.ones(tgt_emb.size(0), dtype=torch.long),
-#                 ],
-#                 dim=0,
-#             ).to(device)
+            # Source graph forward pass
+            src_batch = src_batch.to(device)
+            src_feats = encoder(src_batch.x, src_batch.edge_index, src_batch.batch)
+            src_logits = clf(src_feats)
+            src_labels = src_batch.y
 
-#             domain_pred = disc(domain_emb, alpha)
-#             domain_loss = F.cross_entropy(domain_pred, domain_labels)
+            # Target graph forward pass
+            tgt_batch = tgt_batch.to(device)
+            tgt_feats = encoder(tgt_batch.x, tgt_batch.edge_index, tgt_batch.batch)
 
-#             loss = src_loss + domain_loss
-#             loss.backward()
-#             optimizer.step()
+            # Source + Target forward pass on discriminator
+            dom_feats = torch.cat([src_feats, tgt_feats], dim=0)
+            dom_logits = disc(dom_feats, alpha)
+            dom_labels = torch.cat(
+                [
+                    torch.zeros(src_feats.size(0), dtype=torch.long),
+                    torch.ones(tgt_feats.size(0), dtype=torch.long),
+                ],
+                dim=0,
+            ).to(device)
 
-#             total_clf_loss += src_loss.item()
-#             total_domain_loss += domain_loss.item()
+            # Compute loss
+            loss, _, _ = loss_da(
+                src_logits,
+                src_labels,
+                dom_logits,
+                dom_labels,
+            )
 
-#         # Get accuracy
-#         src_acc, _, _ = eval_model(src_loader)
-#         encoder.train()
-#         clf.train()
+            # Backpropagate losses and update parameters
+            loss.backward()
+            optimizer.step()
 
-#         # Append metrics for logging
-#         clf_losses.append(total_clf_loss)
-#         dom_losses.append(total_domain_loss)
-#         clf_accs.append(src_acc)
+        # Evaluate on training and vallidation data and then put model back in training mode
+        train_logs = val_da(
+            encoder,
+            clf,
+            disc,
+            optimizer,
+            src_train_loader,
+            tgt_train_loader,
+            num_classes=num_classes,
+            sg_idx=sg_idx,
+            alpha=alpha,
+            device=device,
+        )
+        val_logs = val_da(
+            encoder,
+            clf,
+            disc,
+            optimizer,
+            src_val_loader,
+            tgt_val_loader,
+            num_classes=num_classes,
+            sg_idx=sg_idx,
+            alpha=alpha,
+            device=device,
+        )
+        encoder.train()
+        clf.train()
+        disc.train()
 
-#         # Log and step learning rate scheduler
-#         lrs.append(optimizer.param_groups[0]["lr"])
-#         scheduler.step()
+        # Optionally prune if using optuna
+        if trial is not None:
 
-#         print(
-#             f"Epoch {epoch:03d}  Classifier Loss: {total_clf_loss:.4f}  Discriminator Loss: {total_domain_loss:.4f}"
-#         )
+            # Compute metric and report
+            metric = metric_fn([val_logs])
+            logger.debug("Reporting metric to optuna trial: %f", metric)
+            trial.report(metric, epoch)
 
-#     return clf_losses, dom_losses, clf_accs, lrs
+            # Handle pruning based on the intermediate value.
+            if trial.should_prune():
+                raise optuna.exceptions.TrialPruned()
+
+        # Append metrics for logging
+        logs["train_aucs"].append(train_logs["auc"])
+        logs["train_losses"].append(train_logs["loss"])
+        logs["train_losses_cls"].append(train_logs["loss_cls"])
+        logs["train_losses_disc"].append(train_logs["loss_disc"])
+        logs["train_accs_raw"].append(train_logs["acc_raw"])
+        logs["train_accs_per_class"].append(train_logs["acc_per_class"])
+        logs["train_accs_balanced"].append(train_logs["acc_balanced"])
+        logs["val_aucs"].append(val_logs["auc"])
+        logs["val_losses"].append(val_logs["loss"])
+        logs["val_losses_cls"].append(val_logs["loss_cls"])
+        logs["val_losses_disc"].append(val_logs["loss_disc"])
+        logs["val_accs_raw"].append(val_logs["acc_raw"])
+        logs["val_accs_per_class"].append(val_logs["acc_per_class"])
+        logs["val_accs_balanced"].append(val_logs["acc_balanced"])
+        logs["lrs"].append(optimizer.param_groups[0]["lr"])
+
+        # Step learning rate step scheduler
+        if lr_scheduler is not None:
+            lr_scheduler.step()
+
+        # Print training info
+        if verbose:
+            message = [f"Epoch {epoch:03d}"]
+            for key in logs:
+                if type(logs[key][-1]) == float:
+                    message.append(f"{key}: {logs[key][-1]:.4f}")
+            message = "\n\t".join(message)
+            print(message)
+
+    return logs
 
 
-# def train_can(epochs=100, temp_fn=temp_fn, alpha_fn=0.1):
-#     encoder.train()
-#     clf.train()
+def train_can(
+    encoder,
+    clf,
+    projector,
+    optimizer,
+    src_train_loader,
+    tgt_train_loader,
+    src_val_loader,
+    tgt_val_loader,
+    num_classes=2,
+    sg_idx=1,
+    nepochs=100,
+    lr_scheduler=None,
+    temp_fn=0.1,
+    alpha_fn=0.1,
+    device="cuda:0",
+    verbose=True,
+    trial=None,
+    metric_fn=lambda logs: logs[0]["auc"],  # Available logs are [val_logs]
+):
 
-#     # Set logging lists to return
-#     clf_losses = []
-#     can_losses = []
-#     clf_accs = []
-#     lrs = []
+    # Set models in train mode
+    encoder.train()
+    clf.train()
+    projector.train()
 
-#     # Loop training epochs
-#     for epoch in range(1, epochs + 1):
+    # Set logging lists to return
+    logs = {}
+    logs["train_aucs"] = []
+    logs["train_losses"] = []
+    logs["train_losses_cls"] = []
+    logs["train_losses_can"] = []
+    logs["train_accs_raw"] = []
+    logs["train_accs_per_class"] = []
+    logs["train_accs_balanced"] = []
+    logs["val_aucs"] = []
+    logs["val_losses"] = []
+    logs["val_losses_cls"] = []
+    logs["val_losses_can"] = []
+    logs["val_accs_raw"] = []
+    logs["val_accs_per_class"] = []
+    logs["val_accs_balanced"] = []
+    logs["lrs"] = []
 
-#         # Check alpha function
-#         if callable(alpha_fn):
-#             alpha = alpha_fn(epoch, epochs)
-#         else:
-#             alpha = alpha_fn
+    # Loop training epochs
+    for epoch in tqdm(range(1, nepochs + 1)):
 
-#         # Check temp function
-#         if callable(temp_fn):
-#             temp = temp_fn(epoch, epochs)
-#         else:
-#             temp = temp_fn
+        # Check alpha function
+        if callable(alpha_fn):
+            alpha = alpha_fn(epoch, nepochs)
+        else:
+            alpha = alpha_fn
 
-#         total_clf_loss = 0
-#         total_can_loss = 0
-#         # Parallel iteration over source and target loaders
-#         for src_batch, tgt_batch in zip(src_loader, tgt_loader):
-#             optimizer.zero_grad()
+        # Check temp function
+        if callable(temp_fn):
+            temp = temp_fn(epoch, nepochs)
+        else:
+            temp = temp_fn
 
-#             # Source graph forward pass
-#             src_batch = src_batch.to(device)
-#             src_emb = encoder(src_batch.x, src_batch.edge_index, src_batch.batch)
-#             src_out = clf(src_emb)
-#             src_loss = F.cross_entropy(src_out, src_batch.y)
+        # Iterate over source and target loaders in parallel
+        for src_batch, tgt_batch in zip(src_train_loader, tgt_train_loader):
 
-#             # Target graph forward pass
-#             tgt_batch = tgt_batch.to(device)
-#             tgt_emb = encoder(tgt_batch.x, tgt_batch.edge_index, tgt_batch.batch)
+            # Reset gradients
+            optimizer.zero_grad()
 
-#             # Contrastive loss (align source and target representations)
-#             z1 = projector(src_emb)
-#             z2 = projector(tgt_emb)
-#             can_loss = contrastive_loss(z1, z2, temperature=temp)
+            # Source graph forward pass
+            src_batch = src_batch.to(device)
+            src_feats = encoder(src_batch.x, src_batch.edge_index, src_batch.batch)
+            src_logits = clf(src_feats)
+            src_projs = projector(src_feats)
+            src_labels = src_batch.y
 
-#             # # Classification loss (only on source)
-#             # cls_loss = F.cross_entropy(src_out, src_batch.y)
+            # Target graph forward pass
+            tgt_batch = tgt_batch.to(device)
+            tgt_feats = encoder(tgt_batch.x, tgt_batch.edge_index, tgt_batch.batch)
+            tgt_projs = projector(tgt_feats)
 
-#             loss = src_loss + alpha * can_loss
-#             loss.backward()
-#             optimizer.step()
+            # Compute loss
+            loss, _, _ = loss_can(
+                src_logits,
+                src_labels,
+                src_projs,
+                tgt_projs,
+                alpha=alpha,
+                temp=temp,
+            )
 
-#             total_clf_loss += src_loss.item()
-#             total_can_loss += can_loss.item()
+            # Backpropagate losses and update parameters
+            loss.backward()
+            optimizer.step()
 
-#         # Get accuracy
-#         src_acc, _, _ = eval_model(src_loader_unweighted)
-#         encoder.train()
-#         clf.train()
+        # Evaluate on training and vallidation data and then put model back in training mode
+        train_logs = val_can(
+            encoder,
+            clf,
+            projector,
+            optimizer,
+            src_train_loader,
+            tgt_train_loader,
+            num_classes=num_classes,
+            sg_idx=sg_idx,
+            temp=temp,
+            alpha=alpha,
+            device=device,
+        )
+        val_logs = val_can(
+            encoder,
+            clf,
+            projector,
+            optimizer,
+            src_val_loader,
+            tgt_val_loader,
+            num_classes=num_classes,
+            sg_idx=sg_idx,
+            temp=temp,
+            alpha=alpha,
+            device=device,
+        )
+        encoder.train()
+        clf.train()
+        projector.train()
 
-#         # Append metrics for logging
-#         clf_losses.append(total_clf_loss)
-#         can_losses.append(total_can_loss)
-#         clf_accs.append(src_acc)
+        # Optionally prune if using optuna
+        if trial is not None:
 
-#         # Log and step learning rate scheduler
-#         lrs.append(optimizer.param_groups[0]["lr"])
-#         if scheduler is not None:
-#             scheduler.step()
+            # Compute metric and report
+            metric = metric_fn([val_logs])
+            logger.debug("Reporting metric to optuna trial: %f", metric)
+            trial.report(metric, epoch)
 
-#         print(
-#             f"Epoch {epoch:03d}  Classifier Loss: {total_clf_loss:.4f}  Contrastive Loss: {total_can_loss:.4f}"
-#         )
+            # Handle pruning based on the intermediate value.
+            if trial.should_prune():
+                raise optuna.exceptions.TrialPruned()
 
-#     return clf_losses, can_losses, clf_accs, lrs
+        # Append metrics for logging
+        logs["train_aucs"].append(train_logs["auc"])
+        logs["train_losses"].append(train_logs["loss"])
+        logs["train_losses_cls"].append(train_logs["loss_cls"])
+        logs["train_losses_con"].append(train_logs["loss_con"])
+        logs["train_accs_raw"].append(train_logs["acc_raw"])
+        logs["train_accs_per_class"].append(train_logs["acc_per_class"])
+        logs["train_accs_balanced"].append(train_logs["acc_balanced"])
+        logs["val_aucs"].append(val_logs["auc"])
+        logs["val_losses"].append(val_logs["loss"])
+        logs["val_losses_cls"].append(val_logs["loss_cls"])
+        logs["val_losses_con"].append(val_logs["loss_con"])
+        logs["val_accs_raw"].append(val_logs["acc_raw"])
+        logs["val_accs_per_class"].append(val_logs["acc_per_class"])
+        logs["val_accs_balanced"].append(val_logs["acc_balanced"])
+        logs["lrs"].append(optimizer.param_groups[0]["lr"])
+
+        # Step learning rate step scheduler
+        if lr_scheduler is not None:
+            lr_scheduler.step()
+
+        # Print training info
+        if verbose:
+            message = [f"Epoch {epoch:03d}"]
+            for key in logs:
+                if type(logs[key][-1]) == float:
+                    message.append(f"{key}: {logs[key][-1]:.4f}")
+            message = "\n\t".join(message)
+            print(message)
+
+    return logs
 
 
 def train_titok(
