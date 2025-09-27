@@ -7,7 +7,7 @@ import torch_geometric.transforms as T
 from torch.optim.lr_scheduler import StepLR
 
 # Local imports
-from lambdaml.pipeline import pipeline_titok
+from lambdaml.pipeline import pipeline_can
 from lambdaml.functional import (
     sigmoid_decay,
     sigmoid_growth,
