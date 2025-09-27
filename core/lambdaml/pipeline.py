@@ -120,6 +120,7 @@ def pipeline_titok(
 
     # Create output directory
     if out_dir is not None and len(out_dir) > 0:
+        logger.info("Creating out directory %s", out_dir)
         makedirs(out_dir, exist_ok=True)
 
     # Expand paths
