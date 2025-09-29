@@ -75,7 +75,7 @@ def plot_roc(
 ):
     ax.plot([0, 1], [0, 1], color="navy", lw=1, linestyle="--")
     ax.plot(
-        fpr, tpr, color="darkorange", lw=2, label=f"ROC curve (AUC = {roc_auc:.2f})"
+        fpr, tpr, color="darkorange", lw=2, label=f"ROC curve (AUC = {auc:.2f})"
     )
     ax.scatter(
         best_fpr,
