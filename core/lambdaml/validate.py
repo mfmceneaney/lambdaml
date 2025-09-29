@@ -428,7 +428,7 @@ def get_best_threshold(labels, probs, return_arrays=True):
                 "best_fom": 0.0,
                 "best_thr": 0.0,
             },
-            (,),
+            (),
         )
 
     # Compute ROC curve and AUC
