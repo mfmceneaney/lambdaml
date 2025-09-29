@@ -67,7 +67,7 @@ def plot_roc(
     ax,
     fpr=(),
     tpr=(),
-    roc_auc=0.0,
+    auc=0.0,
     best_fpr=0.0,
     best_tpr=0.0,
     best_fom=0.0,
