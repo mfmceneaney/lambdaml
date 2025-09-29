@@ -420,13 +420,16 @@ def get_best_threshold(labels, probs, return_arrays=True):
 
     # Check arguments
     if torch.sum(labels) > 0:
-        return {
-            "auc": 0.0,
-            "best_fpr": 0.0,
-            "best_tpr": 0.0,
-            "best_fom": 0.0,
-            "best_thr": 0.0,
-        }
+        return (
+            {
+                "auc": 0.0,
+                "best_fpr": 0.0,
+                "best_tpr": 0.0,
+                "best_fom": 0.0,
+                "best_thr": 0.0,
+            },
+            (,),
+        )
 
     # Compute ROC curve and AUC
     logger.debug("labels = %s", labels)
