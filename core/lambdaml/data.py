@@ -441,6 +441,8 @@ class LazyDataset(Dataset):
             os.path.join(self.processed_dir, self.processed_file_names[batch_idx]),
             weights_only=self.weights_only,
         )
+        logger.debug("len(_loaded_batch) = %d", len(_loaded_batch))
+        logger.debug("within_idx = %d", within_idx)
         data = _loaded_batch[within_idx]
         return data
 
