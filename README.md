@@ -5,7 +5,7 @@ This is a project to train Graph Neural Networks (GNNs) for $\Lambda$ hyperon ev
 
 ## :green_circle: Installation
 
-You can use either a container image via [Docker](https://www.docker.com) or install manually assuming you have python installed.
+You can use either a container image via [Docker](https://www.docker.com) or [Singularity/Apptainer](https://github.com/apptainer/apptainer) or install manually assuming you have python installed.
 
 ### Installation Via Docker
 
@@ -39,6 +39,7 @@ docker run --rm lambdaml-project python3 </path/to/my/python/sript.py>
 Once you start the container you should have the following environment variables:
 - `LAMBDAML_HOME`
 - `LAMBDAML_APP_DIR`
+
 If you have input data directories and output data directories for your preprocessing or training pipelines, you can mount several directories.
 ```bash
 docker run --rm -it -v /path/to/lambdaml:/usr/src/lambdaml -v /path/for/input/files:/data -v /path/for/out/files:/out lambdaml-project-cu129
