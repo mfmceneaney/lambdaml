@@ -26,6 +26,7 @@ import argparse
 import wandb
 import os
 from uuid import uuid4
+from urllib.parse import urlparse
 
 # Local imports
 from .pipeline import pipeline_titok
@@ -262,6 +263,11 @@ def optimize(
         suggestion_rules = {}
     if pipeline_kwargs is None:
         pipeline_kwargs = {}
+
+    # Create output directory for storage url if not available
+    parsed = urlparse(storage_url)
+    out_dir = os.path.dirname(os.path.abspath(parsed.path))
+    os.makedirs(out_dir, exist_ok=True)
 
     # Create database
     storage = optuna.storages.RDBStorage(
