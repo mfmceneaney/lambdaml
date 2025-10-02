@@ -435,12 +435,12 @@ argparser.add_argument(
 argparser.add_argument(
     "--opt__pipeline",
     type=str,
-    default="pipeline_can",
-    choices=["pipeline_can"],
+    default="pipeline_da",
+    choices=["pipeline_da"],
     help="Pipeline to use for optimization",
 )
 pipeline_choices = {
-    "pipeline_can": pipeline_can,
+    "pipeline_da": pipeline_da,
 }
 
 argparser.add_argument(
