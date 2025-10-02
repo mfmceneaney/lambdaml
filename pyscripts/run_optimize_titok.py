@@ -540,7 +540,7 @@ argparser.add_argument(
     "--wandb_dir",
     type=str,
     default="wandb_logs",
-    help="WANDB_DIR environment variable for path wandb logs directory",
+    help="WANDB_DIR environment variable for path of wandb logs directory",
 )
 
 # Parse arguments and initialize argument dictionary
@@ -564,6 +564,8 @@ args_keys = list(args.keys())
 for key in args_keys:
     if key.startswith("wandb"):
         val = args.pop(key)
+        if key=='wandb_dir' and not val.startswith(osp.sep):
+            val = osp.abspath(osp.join(out_dir, val))
         os.environ[key.upper()] = val
 
 # Pop optuna specific arguments removing "opt__" prefix
