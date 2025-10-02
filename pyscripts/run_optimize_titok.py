@@ -510,8 +510,8 @@ argparser.add_argument(
 argparser.add_argument(
     "--opt__pruner_name",
     type=str,
-    default="median",
-    choices=["median", "noprune", "patient", "percentile", "successivehalving", "hyperband", "threshold", "wilcoxon"],
+    default="",
+    choices=["","median", "noprune", "patient", "percentile", "successivehalving", "hyperband", "threshold", "wilcoxon"],
     help="Optuna pruner name",
 )
 
