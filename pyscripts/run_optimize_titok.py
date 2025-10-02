@@ -585,7 +585,8 @@ opt_args["suggestion_rules"] = suggestion_rules
 opt_args["pipeline"] = pipeline_choices[opt_args["pipeline"]]
 
 # Parse metric function choice
-opt_args["metric_fn"] = lambda logs: logs[0][opt_args["metric_fn"]]
+metric_fn_name = opt_args["metric_fn"]
+opt_args["metric_fn"] = lambda logs: logs[0][metric_fn_name]
 
 # Replace values in args that are aliases for complex classes
 args["transform"] = transform_choices[args["transform"]] if args["transform"] is not None else None
