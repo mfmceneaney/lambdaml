@@ -419,7 +419,8 @@ def get_auc(labels, probs):
 def get_best_threshold(labels, probs, return_arrays=True):
 
     # Check arguments
-    if torch.sum(labels) > 0:
+    sum_labels = torch.sum(labels)
+    if sum_labels==0:
         return (
             {
                 "auc": 0.0,
