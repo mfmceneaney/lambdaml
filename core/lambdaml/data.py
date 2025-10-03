@@ -272,11 +272,13 @@ class LazyDataset(Dataset):
                         metadata["num_batches"] - 1
                     )  # NOTE: This will be incremented below if the last batch is full.
 
-                    # Check that the number of data files and the number of batches are consistent
-                    nfiles = len(glob(os.path.join(self.processed_dir, "data*.pt")))
-                    if nfiles != metadata["num_batches"]:
+                    # Check that the data files and the number of batches for the full dataset
+                    # without dropping the last batch are consistent
+                    actual_data_files = sorted(glob(os.path.join(self.processed_dir, "data*.pt")))
+                    expect_data_files = sorted([f"data{i}.pt" for i in range(metadata['num_batches'])])
+                    if not np.all(actual_datafiles==expect_data_files):
                         raise RuntimeError(
-                            f"Number of data files {nfiles} does not match number of batches {metadata['num_batches']}, dataset is corrupted!"
+                            f"Number of data files {len(actual_datafiles)} does not match number of batches {metadata['num_batches']}, dataset is corrupted!"
                         )
 
                     # Reset metadata for when you write it below
@@ -317,23 +319,11 @@ class LazyDataset(Dataset):
 
     @property
     def raw_file_names(self):
-        if self.datalist is not None and len(self.datalist) > 0:
-            return [f"data{i}.pt" for i in range(self.size)]
-        else:
-            return [
-                os.path.basename(path)
-                for path in glob(os.path.join(self.raw_dir, "data*.pt"))
-            ]
+            return [f"data{i}.pt" for i in range(self.num_batches)]
 
     @property
     def processed_file_names(self):
-        if self.datalist is not None and len(self.datalist) > 0:
             return [f"data{i}.pt" for i in range(self.num_batches)]
-        else:
-            return [
-                os.path.basename(path)
-                for path in glob(os.path.join(self.processed_dir, "data*.pt"))
-            ]
 
     def clean_data(self, data):
 
