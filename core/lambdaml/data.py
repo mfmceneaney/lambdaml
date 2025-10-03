@@ -278,7 +278,7 @@ class LazyDataset(Dataset):
                     expect_data_files = sorted([f"data{i}.pt" for i in range(metadata['num_batches'])])
                     if not actual_data_files==expect_data_files:
                         raise RuntimeError(
-                            f"Number of data files {len(actual_data_files)} does not match number of batches {metadata['num_batches']}, dataset is corrupted!"
+                            f"Actual data files {actual_data_files}\n\tdo not match expected data files {expect_data_files},\n dataset is corrupted!"
                         )
 
                     # Reset metadata for when you write it below
