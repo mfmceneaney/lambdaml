@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lambdaml"
+version = "0.0.0"
+description = "LambdaML -- ML for Lambda Hyperon Identification"
+authors = [
+    { name = "Matthew F. McEneaney", email = "matthew.mceneaney@duke.edu" }
+]
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "torch>=2.8.0",
+    "torch_geometric==2.6.1",
+    "optuna",
+    "optuna-integration[wandb]",
+    "wandb",
+    "tqdm",
+    "particle",
+    "hipopy",
+    "awkward",
+    "scikit-learn",
+    "scipy",
+    "matplotlib",
+    "plotly",
+    "flask",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "black"]
+test = [
+    "pytest>=8.0",
+    "pylint",
+    "black",
+]
+
+[tool.setuptools]
+package-dir = {"" = "core"}
+
+[tool.setuptools.packages.find]
+where = ["core"]
