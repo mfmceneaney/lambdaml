@@ -274,9 +274,16 @@ class LazyDataset(Dataset):
 
                     # Check that the data files and the number of batches for the full dataset
                     # without dropping the last batch are consistent
-                    actual_data_files = [os.path.basename(file_name) for file_name in sorted(glob(os.path.join(self.processed_dir, "data*.pt")))]
-                    expect_data_files = sorted([f"data{i}.pt" for i in range(metadata['num_batches'])])
-                    if not actual_data_files==expect_data_files:
+                    actual_data_files = [
+                        os.path.basename(file_name)
+                        for file_name in sorted(
+                            glob(os.path.join(self.processed_dir, "data*.pt"))
+                        )
+                    ]
+                    expect_data_files = sorted(
+                        [f"data{i}.pt" for i in range(metadata["num_batches"])]
+                    )
+                    if not actual_data_files == expect_data_files:
                         raise RuntimeError(
                             f"Actual data files {actual_data_files}\n\tdo not match expected data files {expect_data_files},\n dataset is corrupted!"
                         )
@@ -319,11 +326,11 @@ class LazyDataset(Dataset):
 
     @property
     def raw_file_names(self):
-            return [f"data{i}.pt" for i in range(self.num_batches)]
+        return [f"data{i}.pt" for i in range(self.num_batches)]
 
     @property
     def processed_file_names(self):
-            return [f"data{i}.pt" for i in range(self.num_batches)]
+        return [f"data{i}.pt" for i in range(self.num_batches)]
 
     def clean_data(self, data):
 
