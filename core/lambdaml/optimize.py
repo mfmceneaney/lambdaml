@@ -187,7 +187,7 @@ def objective(
 
                 # Sample based on type
                 if suggestion_type=="cat":
-                    trial.suggest_categorial(key, suggestion_values)
+                    trial.suggest_categorical(key, suggestion_values)
 
         # Error out if you don't recognize the rule
         else:
