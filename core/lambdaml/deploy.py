@@ -75,7 +75,7 @@ class ModelWrapper:
 
 def select_best_model(
     optuna_study_name="gnn_study",
-    optuna_storage="sqlite:///optuna.db",
+    optuna_storage_url="sqlite:///optuna.db",
     gnn_server_dir="gnn_server/",
     encoder_fname="encoder.pt",
     encoder_params_fname="encoder_params.json",
