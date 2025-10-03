@@ -395,7 +395,7 @@ args.pop("log_level")
 args["transform"] = transform_choices[args["transform"]] if args["transform"] is not None else None
 
 # Loop names of functional arguments and check if a function was actually passed
-fn_names = ("alpha_fn")
+fn_names = ("alpha_fn",)
 for fn_name in fn_names:
     if args[fn_name] is not None and args[fn_name] in fn_choices and callable(fn_choices[args[fn_name]]):
 
