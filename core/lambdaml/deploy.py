@@ -9,6 +9,7 @@ import os.path as osp
 
 # Local imports
 from .models import FlexibleGNNEncoder, GraphClassifier
+from .preprocess import preprocess_rec_particle
 from .log import setup_logger
 
 
@@ -26,7 +27,18 @@ class ModelWrapper:
         clf_path="clf.pt",
         clf_params_path="clf_params.json",
         map_location="cpu",
+        preprocessing_fn=preprocess_rec_particle,
+        preprocessing_fn_kwargs=None,
+        device_name="cuda" if torch.cuda.is_available() else "cpu",
     ):
+
+        # Set attributes
+        logger.info("Using device: %s", device_name)
+        self.device = torch.device(device_name)
+        self.preprocessing_fn = preprocessing_fn
+        self.preprocessing_fn_kwargs = (
+            preprocessing_fn_kwargs if preprocessing_fn_kwargs is not None else {}
+        )
 
         # Load encoder
         logger.debug("Loading encoder parameters from %s", encoder_params_path)
@@ -35,7 +47,9 @@ class ModelWrapper:
             encoder_params = json.load(f)
         logger.debug("Creating encoder from encoder_params = %s", encoder_params)
         self.encoder = encoder_type(**encoder_params)
-        logger.debug("Loading encoder state dictionary to %s from %s", map_location, encoder_path)
+        logger.debug(
+            "Loading encoder state dictionary to %s from %s", map_location, encoder_path
+        )
         self.encoder.load_state_dict(
             torch.load(encoder_path, map_location=map_location)
         )
@@ -48,16 +62,39 @@ class ModelWrapper:
             clf_params = json.load(f)
         logger.debug("Creating classifier from clf_params = %s", clf_params)
         self.clf = clf_type(**clf_params)
-        logger.debug("Loading classifier state dictionary to %s from %s", map_location, clf_path)
+        logger.debug(
+            "Loading classifier state dictionary to %s from %s", map_location, clf_path
+        )
         self.clf.load_state_dict(torch.load(clf_path, map_location=map_location))
         self.clf.eval()
 
-    def predict(self, graph_json):
+        # Copy models to device
+        logger.debug("Copying encoder and classifier to device = %s", self.device)
+        self.encoder = self.encoder.to(self.device)
+        self.clf = self.clf.to(self.device)
 
-        # Assume you are passing a json or dictionary object
-        logger.debug("Loading data from graph_json[\"x\",\"edge_index\"]")
-        x = torch.tensor(graph_json["x"], dtype=torch.float)
-        edge_index = torch.tensor(graph_json["edge_index"], dtype=torch.long)
+    def predict(self, bank_tables):
+
+        # Preprocess graph from an event tables dictionary or json
+        logger.debug("Loading data from bank_tables = %s", bank_tables)
+        x, edge_index = None, None
+        if callable(self.preprocessing_fn):
+            logger.debug(
+                "Obtaining x, edge_index from preprocessing function with kwargs %s",
+                self.preprocessing_fn_kwargs,
+            )
+            x, edge_index = self.preprocessing_fn(
+                bank_tables, **self.preprocessing_fn_kwargs
+            )
+            logger.debug("Copying x, edge_index tensors to device = %s", self.device)
+            x = x.to(self.device)
+            edge_index = edge_index.to(self.device)
+
+        else:
+            raise TypeError(
+                "Preprocessing function must be calllable, but found type(self.preprocessing_fn) =",
+                type(self.preprocessing_fn),
+            )
 
         # Create the graph
         logger.debug("Creating graph from x = %s\n\tand edge_index = %s", x, edge_index)
@@ -104,16 +141,32 @@ def select_best_model(
     clf_params_path = best_trial.user_attrs["clf_params_path"]
 
     # Copy models and params to gnn server directory
-    logger.debug("Copying encoder:\n\t%s\n\t -> %s", encoder_path, osp.join(gnn_server_dir, encoder_fname))
+    logger.debug(
+        "Copying encoder:\n\t%s\n\t -> %s",
+        encoder_path,
+        osp.join(gnn_server_dir, encoder_fname),
+    )
     shutil.copy(encoder_path, osp.join(gnn_server_dir, encoder_fname))
-    logger.debug("Copying encoder params:\n\t%s\n\t -> %s", encoder_params_path, osp.join(gnn_server_dir, osp.basename(encoder_params_fname)))
+    logger.debug(
+        "Copying encoder params:\n\t%s\n\t -> %s",
+        encoder_params_path,
+        osp.join(gnn_server_dir, osp.basename(encoder_params_fname)),
+    )
     shutil.copy(
         encoder_params_path,
         osp.join(gnn_server_dir, osp.basename(encoder_params_fname)),
     )
-    logger.debug("Copying classifier:\n\t%s\n\t -> %s", clf_path, osp.join(gnn_server_dir, clf_fname))
+    logger.debug(
+        "Copying classifier:\n\t%s\n\t -> %s",
+        clf_path,
+        osp.join(gnn_server_dir, clf_fname),
+    )
     shutil.copy(clf_path, osp.join(gnn_server_dir, osp.basename(clf_fname)))
-    logger.debug("Copying classifier params:\n\t%s\n\t -> %s", clf_params_path, osp.join(gnn_server_dir, osp.basename(clf_params_fname)))
+    logger.debug(
+        "Copying classifier params:\n\t%s\n\t -> %s",
+        clf_params_path,
+        osp.join(gnn_server_dir, osp.basename(clf_params_fname)),
+    )
     shutil.copy(
         clf_params_path, osp.join(gnn_server_dir, osp.basename(clf_params_fname))
     )
