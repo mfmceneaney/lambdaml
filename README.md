@@ -201,8 +201,47 @@ python3 /usr/src/lambdaml/pyscripts/run_optimize_titok.py \
 --nepochs 10 \
 --opt__storage_url "sqlite:///$VOLATILE_DIR/experiments/optuna_study.db" \
 --opt__suggestion_rules 'lr=float:0.0001:0.01:log' \
+--opt__study_name 'study' \
 'num_layers_gnn=int:3:8' \
 'alpha_fn=cat:0.1,0.01,sigmoid_growth,sigmoid_decay,linear_growth,linear_decay'
+```
+
+Of course, there are similar pipeline and optimizations scripts for the domain-adversarial and contrastive loss methods as well.
+
+## :rocket: Deploying a Model
+After running a hyperparameter optimization with one of the scripts in [pyscripts/](pyscripts/),
+you will need to select the best or several best models to serve.  Copy these into the `$LAMBDAML_REGISTRY` directory using the [pyscripts/select_best_models.py](pyscripts/select_best_models.py) script.  For example,
+```bash
+singularity exec \
+-B $VOLATILE_DIR,$LAMBDAML_HOME:/usr/src/lambdaml lambdaml-cu129.sif \
+taskset -c 0-31 \
+python3 /usr/src/lambdaml/pyscripts/select_best_models.py \
+--n_best_trials 10 \
+--optuna_storage_url "sqlite:///$VOLATILE_DIR/experiments/optuna_study.db" \
+--optuna_study_name 'study' \
+--registry $LAMBDAML_REGISTRY
+```
+
+After these are copied you can deploy a model of your choice from a given study for use by other processes.  The model is run as an app with flask.
+```bash
+singularity exec \
+-B $VOLATILE_DIR,$LAMBDAML_HOME:/usr/src/lambdaml lambdaml-cu129.sif \
+taskset -c 0-31 \
+python3 /usr/src/lambdaml/app/app.py \
+--optuna_study_name 'study' \
+--registry $LAMBDAML_REGISTRY
+```
+This will simply list the available trial ids code names for a given study.  Once you have chosen a trial id or the corresponding codename, you can specify the model.
+```bash
+singularity exec \
+-B $VOLATILE_DIR,$LAMBDAML_HOME:/usr/src/lambdaml lambdaml-cu129.sif \
+taskset -c 0-31 \
+python3 /usr/src/lambdaml/app/app.py \
+--optuna_study_name 'study' \
+--registry $LAMBDAML_REGISTRY \
+--trial_id 'best-trial' \
+--flask_host "0.0.0.0" \
+--flask_port 5000 #NOTE: This will make your service visible on http://localhost:5000
 ```
 
 #
