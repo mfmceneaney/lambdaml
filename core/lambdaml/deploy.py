@@ -123,7 +123,7 @@ def select_best_model(
     # Connect to the study in the SQL DB
     study = optuna.load_study(
         study_name=optuna_study_name,
-        storage=optuna_storage,  # or use your DB URI
+        storage=optuna_storage_url,  # or use your DB URI
     )
 
     # Get the best trial
