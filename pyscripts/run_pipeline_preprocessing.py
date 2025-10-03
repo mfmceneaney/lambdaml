@@ -1,3 +1,4 @@
+# pylint: disable=no-member
 import argparse
 import json
 
@@ -9,6 +10,7 @@ from lambdaml.preprocess import (
 )
 from lambdaml.pipeline import pipeline_preprocessing
 from lambdaml.log import set_global_log_level
+from lambdaml.util import load_yaml
 
 
 # Create argument parser

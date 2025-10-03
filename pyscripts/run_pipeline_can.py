@@ -14,7 +14,10 @@ from lambdaml.functional import (
     linear_decay,
     linear_growth,
 )
-from lambdaml.util import float_or_choice
+from lambdaml.util import (
+    float_or_choice,
+    load_yaml,
+)
 from lambdaml.log import set_global_log_level
 
 
