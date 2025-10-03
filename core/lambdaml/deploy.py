@@ -113,7 +113,7 @@ class ModelWrapper:
 def select_best_model(
     optuna_study_name="gnn_study",
     optuna_storage_url="sqlite:///optuna.db",
-    gnn_server_dir="gnn_server/",
+    app_dir="app/",
     encoder_fname="encoder.pt",
     encoder_params_fname="encoder_params.json",
     clf_fname="clf.pt",
@@ -144,29 +144,29 @@ def select_best_model(
     logger.debug(
         "Copying encoder:\n\t%s\n\t -> %s",
         encoder_path,
-        osp.join(gnn_server_dir, encoder_fname),
+        osp.join(app_dir, encoder_fname),
     )
-    shutil.copy(encoder_path, osp.join(gnn_server_dir, encoder_fname))
+    shutil.copy(encoder_path, osp.join(app_dir, encoder_fname))
     logger.debug(
         "Copying encoder params:\n\t%s\n\t -> %s",
         encoder_params_path,
-        osp.join(gnn_server_dir, osp.basename(encoder_params_fname)),
+        osp.join(app_dir, osp.basename(encoder_params_fname)),
     )
     shutil.copy(
         encoder_params_path,
-        osp.join(gnn_server_dir, osp.basename(encoder_params_fname)),
+        osp.join(app_dir, osp.basename(encoder_params_fname)),
     )
     logger.debug(
         "Copying classifier:\n\t%s\n\t -> %s",
         clf_path,
-        osp.join(gnn_server_dir, clf_fname),
+        osp.join(app_dir, clf_fname),
     )
-    shutil.copy(clf_path, osp.join(gnn_server_dir, osp.basename(clf_fname)))
+    shutil.copy(clf_path, osp.join(app_dir, osp.basename(clf_fname)))
     logger.debug(
         "Copying classifier params:\n\t%s\n\t -> %s",
         clf_params_path,
-        osp.join(gnn_server_dir, osp.basename(clf_params_fname)),
+        osp.join(app_dir, osp.basename(clf_params_fname)),
     )
     shutil.copy(
-        clf_params_path, osp.join(gnn_server_dir, osp.basename(clf_params_fname))
+        clf_params_path, osp.join(app_dir, osp.basename(clf_params_fname))
     )

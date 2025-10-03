@@ -1,5 +1,6 @@
 # pylint: disable=no-member
 import argparse
+import os
 import os.path as osp
 
 # Local imports
@@ -40,10 +41,10 @@ argparser.add_argument(
 )
 
 argparser.add_argument(
-    "--gnn_server_dir",
+    "--app_dir",
     type=str,
-    default="gnn_server/",
-    help="GNN server directory",
+    default=os.environ["LAMBDAML_APP_DIR"] if "LAMBDAML_APP_DIR" in os.environ else "app",
+    help="Flask app directory where model state dictionaries and parameters will be copied",
 )
 
 argparser.add_argument(
