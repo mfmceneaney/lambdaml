@@ -274,7 +274,7 @@ class LazyDataset(Dataset):
 
                     # Check that the data files and the number of batches for the full dataset
                     # without dropping the last batch are consistent
-                    actual_data_files = sorted(glob(os.path.join(self.processed_dir, "data*.pt")))
+                    actual_data_files = [os.path.basename(file_name) for file_name in sorted(glob(os.path.join(self.processed_dir, "data*.pt")))]
                     expect_data_files = sorted([f"data{i}.pt" for i in range(metadata['num_batches'])])
                     if not actual_data_files==expect_data_files:
                         raise RuntimeError(
