@@ -144,9 +144,9 @@ def objective(
     # Suggestion rule format:
     # suggestion_rules = {
     #     "param_name": {
-    #         "type": "float" | "int" | "categorical",
+    #         "type": "float" | "int" | "cat",
     #         "range": [min, max],  # for float and int
-    #         "values": [val1, val2, ...],  # for categorical
+    #         "values": [val1, val2, ...],  # for cat(categorical)
     #         "log": True | False,  # for float
     #         "step": step_size,  # for float
     #     },
@@ -186,7 +186,7 @@ def objective(
                 suggestion_values = suggestion_rule["values"]
 
                 # Sample based on type
-                if suggestion_type == "categorical" or suggestion_type=="cat":
+                if suggestion_type=="cat":
                     trial.suggest_categorial(key, suggestion_values)
 
         # Error out if you don't recognize the rule
