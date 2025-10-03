@@ -531,7 +531,7 @@ for key in args_keys:
     if key.startswith("wandb"):
         val = args.pop(key)
         if key=='wandb_dir' and not val.startswith(osp.sep):
-            val = osp.abspath(osp.join(args.out_dir, val))
+            val = osp.abspath(osp.join(args["out_dir"], val))
         os.environ[key.upper()] = val
 
 # Pop optuna specific arguments removing "opt__" prefix
