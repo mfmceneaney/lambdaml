@@ -1,10 +1,8 @@
 # pylint: disable=no-member
-import yaml
 import json
 import argparse
 import torch
 import torch_geometric.transforms as T
-from torch.optim.lr_scheduler import StepLR
 import os
 import os.path as osp
 
@@ -16,7 +14,10 @@ from lambdaml.functional import (
     linear_decay,
     linear_growth,
 )
-from lambdaml.util import float_or_choice
+from lambdaml.util import (
+    float_or_choice,
+    load_yaml,
+)
 from lambdaml.log import set_global_log_level
 from lambdaml.optimize import (
     parse_suggestion_rule,
@@ -24,13 +25,26 @@ from lambdaml.optimize import (
 )
 
 
-argparser = argparse.ArgumentParser(description="Run hyperparameter optimization on the domain-adversarial pipeline")
+argparser = argparse.ArgumentParser(
+    description="Run hyperparameter optimization on the domain-adversarial pipeline"
+)
 
 argparser.add_argument(
     "--log_level",
     type=str,
     default="INFO",
-    choices=["debug", "info", "warning", "error", "critical", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+    choices=[
+        "debug",
+        "info",
+        "warning",
+        "error",
+        "critical",
+        "DEBUG",
+        "INFO",
+        "WARNING",
+        "ERROR",
+        "CRITICAL",
+    ],
     help="Log level",
 )
 
@@ -73,7 +87,16 @@ argparser.add_argument(
     "--transform",
     type=str,
     default=None,
-    choices=[None, "knn_graph1", "knn_graph2", "knn_graph3", "knn_graph4", "knn_graph5", "knn_graph6", "normalize_features"],
+    choices=[
+        None,
+        "knn_graph1",
+        "knn_graph2",
+        "knn_graph3",
+        "knn_graph4",
+        "knn_graph5",
+        "knn_graph6",
+        "normalize_features",
+    ],
     action="append",
     help="Transform(s) to use",
 )
@@ -242,10 +265,10 @@ argparser.add_argument(
 )
 
 argparser.add_argument(
-     "--lr_kwargs",
+    "--lr_kwargs",
     type=json.loads,
     default={"step_size": 50, "gamma": 0.5},
-    help="Learning rate scheduler kwargs dictionary in JSON format, e.g., '{\"a\": 1, \"b\": 2}'"
+    help='Learning rate scheduler kwargs dictionary in JSON format, e.g., \'{"a": 1, "b": 2}\'',
 )
 
 fn_choices = {
@@ -257,16 +280,19 @@ fn_choices = {
 
 argparser.add_argument(
     "--alpha_fn",
-    type=lambda value: float_or_choice(value,choices=["sigmoid_growth", "sigmoid_decay", "linear_growth", "linear_decay"]),
+    type=lambda value: float_or_choice(
+        value,
+        choices=["sigmoid_growth", "sigmoid_decay", "linear_growth", "linear_decay"],
+    ),
     default=1.0,
     help="Alpha function",
 )
 
 argparser.add_argument(
-     "--alpha_fn_kwargs",
+    "--alpha_fn_kwargs",
     type=json.loads,
     default=None,
-    help="Alpha function kwargs dictionary in JSON format, e.g., '{\"a\": 1, \"b\": 2}'"
+    help='Alpha function kwargs dictionary in JSON format, e.g., \'{"a": 1, "b": 2}\'',
 )
 
 argparser.add_argument(
@@ -449,7 +475,7 @@ argparser.add_argument(
     type=int,
     default=100,
     help="Number of trials for Optuna",
-)   
+)
 
 argparser.add_argument(
     "--opt__sampler_name",
@@ -470,14 +496,23 @@ argparser.add_argument(
     "--opt__sampler_kwargs",
     type=json.loads,
     default=None,
-    help="Optuna sampler kwargs dict in JSON format, e.g., '{\"arg1\": val1, \"arg2\": val2}'",
+    help='Optuna sampler kwargs dict in JSON format, e.g., \'{"arg1": val1, "arg2": val2}\'',
 )
 
 argparser.add_argument(
     "--opt__pruner_name",
     type=str,
     default="median",
-    choices=["median", "noprune", "patient", "percentile", "successivehalving", "hyperband", "threshold", "wilcoxon"],
+    choices=[
+        "median",
+        "noprune",
+        "patient",
+        "percentile",
+        "successivehalving",
+        "hyperband",
+        "threshold",
+        "wilcoxon",
+    ],
     help="Optuna pruner name",
 )
 
@@ -492,7 +527,7 @@ argparser.add_argument(
     "--opt__pruner_kwargs",
     type=json.loads,
     default=None,
-    help="Optuna pruner kwargs dict in JSON format, e.g., '{\"arg1\": val1, \"arg2\": val2}'",
+    help='Optuna pruner kwargs dict in JSON format, e.g., \'{"arg1": val1, "arg2": val2}\'',
 )
 
 argparser.add_argument(
@@ -530,7 +565,7 @@ args_keys = list(args.keys())
 for key in args_keys:
     if key.startswith("wandb"):
         val = args.pop(key)
-        if key=='wandb_dir' and not val.startswith(osp.sep):
+        if key == "wandb_dir" and not val.startswith(osp.sep):
             val = osp.abspath(osp.join(args["out_dir"], val))
         os.environ[key.upper()] = val
 
@@ -557,21 +592,29 @@ metric_fn_name = opt_args["metric_fn"]
 opt_args["metric_fn"] = lambda logs: logs[0][metric_fn_name]
 
 # Replace values in args that are aliases for complex classes
-args["transform"] = transform_choices[args["transform"]] if args["transform"] is not None else None
+args["transform"] = (
+    transform_choices[args["transform"]] if args["transform"] is not None else None
+)
 
 # Loop names of functional arguments and check if a function was actually passed
 fn_names = ("alpha_fn",)
 for fn_name in fn_names:
-    if args[fn_name] is not None and args[fn_name] in fn_choices and callable(fn_choices[args[fn_name]]):
+    if (
+        args[fn_name] is not None
+        and args[fn_name] in fn_choices
+        and callable(fn_choices[args[fn_name]])
+    ):
 
         # Check if any kwargs are given
-        if args[fn_name+"_kwargs"] is not None:
-            args[fn_name] = lambda *args: fn_choices[args[fn_name]](*args, **args[fn_name+"_kwargs"])
+        if args[fn_name + "_kwargs"] is not None:
+            args[fn_name] = lambda *x, fn=fn_name: fn_choices[args[fn]](
+                *x, **args[fn + "_kwargs"]
+            )
         else:
             args[fn_name] = fn_choices[args[fn_name]]
 
     # Remove kwargs argument
-    args.pop(fn_name+"_kwargs")
+    args.pop(fn_name + "_kwargs")
 
 # Remove config argument
 args.pop("config")
