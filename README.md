@@ -62,6 +62,20 @@ Or, if you just need to run a python script within the container
 ```bash
 singularity exec -B /volatile,/path/to/lambdaml:/usr/src/lambdaml lambdaml-cu129.sif python3 /usr/src/lambdaml/pyscripts/<SCRIPT>.py --help
 ```
+Also, when running t-SNE latent space visualization on HPC, you may get the following error due to the fact that you can have many more cores available than the precompiled allowed numbers for OpenBLAS libraries used in numpy and torch.
+```bash
+OpenBLAS warning: precompiled NUM_THREADS exceeded, adding auxiliary array for thread metadata.
+To avoid this warning, please rebuild your copy of OpenBLAS with a larger NUM_THREADS setting or set the environment variable OPENBLAS_NUM_THREADS to 64 or lower
+BLAS : Bad memory unallocation! : 640 0x7ef44e000000
+BLAS : Bad memory unallocation! : 640 0x7ef450000000
+BLAS : Bad memory unallocation! : 640 0x7ef3d2000000
+BLAS : Bad memory unallocation! : 640 0x7ef3c0000000
+Segmentation fault (core dumped)
+```
+To prevent this you can either `export OPENBLAS_NUM_THREADS=64` or restrict the cores visible to the singularity image with the option `taskset -c 0-31`.
+```bash
+singularity exec -B /volatile,/path/to/lambdaml:/usr/src/lambdaml lambdaml-cu129.sif taskset -c 0-31 python3 /usr/src/lambdaml/pyscripts/<SCRIPT>.py --help
+```
 
 </details>
 
@@ -159,6 +173,7 @@ You can then run the TIToK training script like so:
 ```bash
 singularity exec \
 -B $VOLATILE_DIR,$LAMBDAML_HOME:/usr/src/lambdaml lambdaml-cu129.sif \
+taskset -c 0-31 \
 python3 /usr/src/lambdaml/pyscripts/run_pipeline_titok.py \
 --src_root $VOLATILE_DIR/src_dataset \
 --tgt_root $VOLATILE_DIR/tgt_dataset \
@@ -173,6 +188,7 @@ And you can run a hyperparameter optimization study like so:
 ```bash
 singularity exec \
 -B $VOLATILE_DIR,$LAMBDAML_HOME:/usr/src/lambdaml lambdaml-cu129.sif \
+taskset -c 0-31 \
 python3 /usr/src/lambdaml/pyscripts/run_optimize_titok.py \
 --src_root $VOLATILE_DIR/src_dataset \
 --tgt_root $VOLATILE_DIR/tgt_dataset \
@@ -182,7 +198,9 @@ python3 /usr/src/lambdaml/pyscripts/run_optimize_titok.py \
 --batch_size 32 \
 --nepochs 10 \
 --opt__storage_url "sqlite:///$VOLATILE_DIR/experiments/optuna_study.db" \
---opt__suggestion_rules 'lr=float:0.0001:0.01:log'
+--opt__suggestion_rules 'lr=float:0.0001:0.01:log' \
+'num_layers_gnn=int:3:8' \
+'alpha_fn=cat:0.1,0.01,sigmoid_growth,sigmoid_decay,linear_growth,linear_decay'
 ```
 
 #
