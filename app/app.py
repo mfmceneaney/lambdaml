@@ -2,11 +2,16 @@
 import argparse
 from flask import Flask, request, jsonify
 import sys
+import os
+import os.path as osp
 
 # Local imports
-from lambdaml.core.deploy import ModelWrapper
-from lambdaml.util import load_yaml
-from lambdaml.log import set_global_log_level
+from lambdaml.deploy import ModelWrapper
+from lambdaml.util import load_yaml, load_json
+from lambdaml.log import set_global_log_level, setup_logger
+
+
+logger = setup_logger(__name__)
 
 argparser = argparse.ArgumentParser(description="Deploy model from registry with flask")
 
@@ -14,7 +19,18 @@ argparser.add_argument(
     "--log_level",
     type=str,
     default="INFO",
-    choices=["debug", "info", "warning", "error", "critical", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+    choices=[
+        "debug",
+        "info",
+        "warning",
+        "error",
+        "critical",
+        "DEBUG",
+        "INFO",
+        "WARNING",
+        "ERROR",
+        "CRITICAL",
+    ],
     help="Log level",
 )
 
@@ -42,7 +58,11 @@ argparser.add_argument(
 argparser.add_argument(
     "--registry",
     type=str,
-    default=os.environ["LAMBDAML_REGISTRY"] if "LAMBDAML_REGISTRY" in os.environ else "app/registry",
+    default=(
+        os.environ["LAMBDAML_REGISTRY"]
+        if "LAMBDAML_REGISTRY" in os.environ
+        else "app/registry"
+    ),
     help="Flask app directory where model state dictionaries and parameters will be copied",
 )
 
@@ -83,8 +103,8 @@ args.pop("config")
 metadata_dir = osp.join(args["registry"], args["optuna_study_name"])
 metadata_path = osp.join(metadata_dir, "metadata.json")
 logger.debug("Loading app metadata from %s", metadata_path)
-trials_to_codenames = load_json(metadata_path, trial_to_codenames)
-codenames_to_trials = {trials_to_codenames[key]:key for key in trials_to_codenames}
+trials_to_codenames = load_json(metadata_path)
+codenames_to_trials = {trials_to_codenames[key]: key for key in trials_to_codenames}
 
 # Load the appropriate trial id
 if not args["trial_id"] in trials_to_codenames:
@@ -92,23 +112,23 @@ if not args["trial_id"] in trials_to_codenames:
     # Check if you were passed the literal trial id and reset to the codename
     if args["trial_id"] in codenames_to_trials:
         args["trial_id"] = codenames_to_trials[args["trial_id"]]
-    
+
     # Otherwise default to just printing out the available codenames
     else:
         print("Requested trial id not available from registry in:\n\t", metadata_dir)
         print("trial uuid =>\t codename")
         print("--------------------------------------------------")
         for trial in trials_to_codenames:
-            print("\t",trial,"=>\t",trials_to_codenames[trial])
+            print("\t", trial, "=>\t", trials_to_codenames[trial])
         sys.exit(0)
 
 # Initialialize flask app and model
 app = Flask(__name__)
+trial_dir = osp.join(metadata_dir, args["trial_id"])
 model = ModelWrapper(
-    registry=args["registry"],
-    study_name=args["optuna_study_name"],
-    trial_id=args["trial_id"],
+    trial_dir=trial_dir,
 )
+
 
 # Define the app
 @app.route("/predict", methods=["POST"])
@@ -117,8 +137,9 @@ def predict():
     try:
         prob = model.predict(bank_tables)
         return jsonify({"probability": prob})
-    except Exception as e:
+    except TypeError as e:
         return jsonify({"error": str(e)}), 500
+
 
 # Run the flaskapp with the specified
 app.run(host=args["flask_host"], port=args["flask_port"])

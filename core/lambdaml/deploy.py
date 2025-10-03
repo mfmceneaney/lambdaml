@@ -5,6 +5,7 @@ from torch_geometric.data import Data
 import json
 import optuna
 import shutil
+import os
 import os.path as osp
 from codename import codename
 
@@ -12,6 +13,7 @@ from codename import codename
 from .models import FlexibleGNNEncoder, GraphClassifier
 from .preprocess import preprocess_rec_particle
 from .log import setup_logger
+from .util import save_json
 
 
 # Set module logger
@@ -22,9 +24,7 @@ class ModelWrapper:
     def __init__(
         self,
         encoder_type=FlexibleGNNEncoder,
-        registry="app/registry/",
-        study_name="hpo_model",
-        trial_id="",
+        trial_dir="app/registry/model_hpo/trial_id",
         encoder_fname="encoder.pt",
         encoder_params_fname="encoder_params.json",
         clf_type=GraphClassifier,
@@ -37,7 +37,9 @@ class ModelWrapper:
     ):
 
         # Set attributes
-        logger.info("Using device: %s", device_name)
+        logger.debug("Using trial directory: %s", trial_dir)
+        self.trial_dir = osp.abspath(trial_dir)
+        logger.debug("Using device: %s", device_name)
         self.device = torch.device(device_name)
         self.preprocessing_fn = preprocessing_fn
         self.preprocessing_fn_kwargs = (
@@ -45,14 +47,18 @@ class ModelWrapper:
         )
 
         # Load encoder
-        logger.debug("Loading encoder parameters from %s", encoder_params_fname)
+        encoder_params_path = osp.join(self.trial_dir, encoder_params_fname)
+        logger.debug("Loading encoder parameters from %s", encoder_params_path)
         encoder_params = {}
-        with open(encoder_params_fname, "r", encoding="utf-8") as f:
+        with open(encoder_params_path, "r", encoding="utf-8") as f:
             encoder_params = json.load(f)
         logger.debug("Creating encoder from encoder_params = %s", encoder_params)
         self.encoder = encoder_type(**encoder_params)
+        encoder_path = osp.join(self.trial_dir, encoder_fname)
         logger.debug(
-            "Loading encoder state dictionary to %s from %s", map_location, encoder_fname
+            "Loading encoder state dictionary to %s from %s",
+            map_location,
+            encoder_path,
         )
         self.encoder.load_state_dict(
             torch.load(encoder_fname, map_location=map_location)
@@ -60,14 +66,16 @@ class ModelWrapper:
         self.encoder.eval()
 
         # Load classifier
-        logger.debug("Loading classifier parameters from %s", clf_params_fname)
+        clf_params_path = osp.join(self.trial_dir, clf_params_fname)
+        logger.debug("Loading classifier parameters from %s", clf_params_path)
         clf_params = {}
-        with open(clf_params_fname, "r", encoding="utf-8") as f:
+        with open(clf_params_path, "r", encoding="utf-8") as f:
             clf_params = json.load(f)
         logger.debug("Creating classifier from clf_params = %s", clf_params)
         self.clf = clf_type(**clf_params)
+        clf_path = osp.join(self.trial_dir, clf_fname)
         logger.debug(
-            "Loading classifier state dictionary to %s from %s", map_location, clf_fname
+            "Loading classifier state dictionary to %s from %s", map_location, clf_path
         )
         self.clf.load_state_dict(torch.load(clf_fname, map_location=map_location))
         self.clf.eval()
@@ -133,26 +141,30 @@ def select_best_models(
     )
 
     # Get all completed trials, sorted by value
-    completed_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
+    completed_trials = [
+        t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE
+    ]
 
     # Sort by objective value (ascending for minimization)
-    top_n_trials = sorted(completed_trials, key=lambda t: t.value)[:n]
+    top_n_trials = sorted(completed_trials, key=lambda t: t.value)[:n_best_trials]
 
     # Record top n trials ordering and codenames to trials map
     trials_to_codenames = {
-        str(t.number): codename.codename(id=str(t.number),separator=codename_separator) for t in top_n_trials
+        str(t.number): codename.codename(id=str(t.number), separator=codename_separator)
+        for t in top_n_trials
     }
     metadata_dir = osp.join(registry, optuna_study_name)
     logger.debug("Creating app study directory %s", metadata_dir)
     os.makedirs(metadata_dir, exist_ok=True)
-    metadata_path = osp.join(registry, study_name, "metadata.json")
+    metadata_path = osp.join(registry, optuna_study_name, "metadata.json")
     logger.debug("Saving app metadata to %s", metadata_path)
-    save_json(metadata_path, trial_to_codenames)
+    save_json(metadata_path, trials_to_codenames)
 
     # Loop n trials
     for i, trial in enumerate(top_n_trials):
 
         # Access hyperparameters and custom user attributes
+        logger.info("Trial rank: %d", i)
         logger.info("Trial number: %s", trial.number)
         logger.info("Trial codename: %s", trials_to_codenames[trial.number])
         logger.info("Trial value: %s", trial.value)
@@ -166,7 +178,9 @@ def select_best_models(
         clf_params_path = trial.user_attrs["clf_params_path"]
 
         # Set trial application directory
-        trial_registry = osp.abspath(osp.join(registry, study.name, trials_to_codenames[trial.number]))
+        trial_registry = osp.abspath(
+            osp.join(registry, study.name, trials_to_codenames[trial.number])
+        )
         os.makedirs(trial_registry, exist_ok=True)
         logger.debug("Copying trial %s to %s", trial.number, trial_registry)
 

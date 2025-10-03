@@ -9,13 +9,26 @@ from lambdaml.log import set_global_log_level
 from lambdaml.util import load_yaml
 
 
-argparser = argparse.ArgumentParser(description="Select model from Optuna database with SQL query")
+argparser = argparse.ArgumentParser(
+    description="Select model from Optuna database with SQL query"
+)
 
 argparser.add_argument(
     "--log_level",
     type=str,
     default="INFO",
-    choices=["debug", "info", "warning", "error", "critical", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+    choices=[
+        "debug",
+        "info",
+        "warning",
+        "error",
+        "critical",
+        "DEBUG",
+        "INFO",
+        "WARNING",
+        "ERROR",
+        "CRITICAL",
+    ],
     help="Log level",
 )
 
@@ -50,7 +63,11 @@ argparser.add_argument(
 argparser.add_argument(
     "--registry",
     type=str,
-    default=os.environ["LAMBDAML_REGISTRY"] if "LAMBDAML_REGISTRY" in os.environ else "app/registry",
+    default=(
+        os.environ["LAMBDAML_REGISTRY"]
+        if "LAMBDAML_REGISTRY" in os.environ
+        else "app/registry"
+    ),
     help="Flask app directory where model state dictionaries and parameters will be copied",
 )
 
@@ -108,6 +125,6 @@ args.pop("log_level")
 # Remove config argument
 args.pop("config")
 
-# Select top n models and copy model states 
+# Select top n models and copy model states
 # and parameter definitions to flask app directory
 select_best_models(**args)
