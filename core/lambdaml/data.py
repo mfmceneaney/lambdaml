@@ -276,7 +276,7 @@ class LazyDataset(Dataset):
                     # without dropping the last batch are consistent
                     actual_data_files = sorted(glob(os.path.join(self.processed_dir, "data*.pt")))
                     expect_data_files = sorted([f"data{i}.pt" for i in range(metadata['num_batches'])])
-                    if not np.all(actual_datafiles==expect_data_files):
+                    if not actual_datafiles==expect_data_files:
                         raise RuntimeError(
                             f"Number of data files {len(actual_datafiles)} does not match number of batches {metadata['num_batches']}, dataset is corrupted!"
                         )
