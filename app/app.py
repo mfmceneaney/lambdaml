@@ -7,9 +7,9 @@ model = ModelWrapper()
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    graph = request.get_json()
+    bank_tables = request.get_json()
     try:
-        prob = model.predict(graph)
+        prob = model.predict(bank_tables)
         return jsonify({"probability": prob})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
