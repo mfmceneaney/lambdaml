@@ -40,7 +40,7 @@ docker run --rm lambdaml-project python3 </path/to/my/python/sript.py>
 ```
 Once you start the container you should have the following environment variables:
 - `LAMBDAML_HOME`
-- `LAMBDAML_APP_DIR`
+- `LAMBDAML_REGISTRY`
 
 If you have input data directories and output data directories for your preprocessing or training pipelines, you can mount several directories.
 ```bash

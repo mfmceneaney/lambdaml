@@ -6,6 +6,7 @@ import json
 import optuna
 import shutil
 import os.path as osp
+from codename import codename
 
 # Local imports
 from .models import FlexibleGNNEncoder, GraphClassifier
@@ -21,11 +22,14 @@ class ModelWrapper:
     def __init__(
         self,
         encoder_type=FlexibleGNNEncoder,
-        encoder_path="encoder.pt",
-        encoder_params_path="encoder_params.json",
+        registry="app/registry/",
+        study_name="hpo_model",
+        trial_id="",
+        encoder_fname="encoder.pt",
+        encoder_params_fname="encoder_params.json",
         clf_type=GraphClassifier,
-        clf_path="clf.pt",
-        clf_params_path="clf_params.json",
+        clf_fname="clf.pt",
+        clf_params_fname="clf_params.json",
         map_location="cpu",
         preprocessing_fn=preprocess_rec_particle,
         preprocessing_fn_kwargs=None,
@@ -41,31 +45,31 @@ class ModelWrapper:
         )
 
         # Load encoder
-        logger.debug("Loading encoder parameters from %s", encoder_params_path)
+        logger.debug("Loading encoder parameters from %s", encoder_params_fname)
         encoder_params = {}
-        with open(encoder_params_path, "r", encoding="utf-8") as f:
+        with open(encoder_params_fname, "r", encoding="utf-8") as f:
             encoder_params = json.load(f)
         logger.debug("Creating encoder from encoder_params = %s", encoder_params)
         self.encoder = encoder_type(**encoder_params)
         logger.debug(
-            "Loading encoder state dictionary to %s from %s", map_location, encoder_path
+            "Loading encoder state dictionary to %s from %s", map_location, encoder_fname
         )
         self.encoder.load_state_dict(
-            torch.load(encoder_path, map_location=map_location)
+            torch.load(encoder_fname, map_location=map_location)
         )
         self.encoder.eval()
 
         # Load classifier
-        logger.debug("Loading classifier parameters from %s", clf_params_path)
+        logger.debug("Loading classifier parameters from %s", clf_params_fname)
         clf_params = {}
-        with open(clf_params_path, "r", encoding="utf-8") as f:
+        with open(clf_params_fname, "r", encoding="utf-8") as f:
             clf_params = json.load(f)
         logger.debug("Creating classifier from clf_params = %s", clf_params)
         self.clf = clf_type(**clf_params)
         logger.debug(
-            "Loading classifier state dictionary to %s from %s", map_location, clf_path
+            "Loading classifier state dictionary to %s from %s", map_location, clf_fname
         )
-        self.clf.load_state_dict(torch.load(clf_path, map_location=map_location))
+        self.clf.load_state_dict(torch.load(clf_fname, map_location=map_location))
         self.clf.eval()
 
         # Copy models to device
@@ -110,10 +114,12 @@ class ModelWrapper:
         return prob
 
 
-def select_best_model(
+def select_best_models(
+    n_best_trials=1,
     optuna_study_name="gnn_study",
     optuna_storage_url="sqlite:///optuna.db",
-    app_dir="app/",
+    registry="app/registry/",
+    codename_separator="-",
     encoder_fname="encoder.pt",
     encoder_params_fname="encoder_params.json",
     clf_fname="clf.pt",
@@ -126,47 +132,71 @@ def select_best_model(
         storage=optuna_storage_url,  # or use your DB URI
     )
 
-    # Get the best trial
-    best_trial = study.best_trial
+    # Get all completed trials, sorted by value
+    completed_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
 
-    # Access hyperparameters and custom user attributes
-    logger.info("Best trial value: %s", best_trial.value)
-    logger.info("Hyperparameters: %s", best_trial.params)
-    logger.info("Trial user attributes: %s", best_trial.user_attrs)
+    # Sort by objective value (ascending for minimization)
+    top_n_trials = sorted(completed_trials, key=lambda t: t.value)[:n]
 
-    # Load encoder and classifier file paths (assuming you stored them with trial.set_user_attr)
-    encoder_path = best_trial.user_attrs["encoder_path"]
-    encoder_params_path = best_trial.user_attrs["encoder_params_path"]
-    clf_path = best_trial.user_attrs["clf_path"]
-    clf_params_path = best_trial.user_attrs["clf_params_path"]
+    # Record top n trials ordering and codenames to trials map
+    trials_to_codenames = {
+        str(t.number): codename.codename(id=str(t.number),separator=codename_separator) for t in top_n_trials
+    }
+    metadata_dir = osp.join(registry, optuna_study_name)
+    logger.debug("Creating app study directory %s", metadata_dir)
+    os.makedirs(metadata_dir, exist_ok=True)
+    metadata_path = osp.join(registry, study_name, "metadata.json")
+    logger.debug("Saving app metadata to %s", metadata_path)
+    save_json(metadata_path, trial_to_codenames)
 
-    # Copy models and params to gnn server directory
-    logger.debug(
-        "Copying encoder:\n\t%s\n\t -> %s",
-        encoder_path,
-        osp.join(app_dir, encoder_fname),
-    )
-    shutil.copy(encoder_path, osp.join(app_dir, encoder_fname))
-    logger.debug(
-        "Copying encoder params:\n\t%s\n\t -> %s",
-        encoder_params_path,
-        osp.join(app_dir, osp.basename(encoder_params_fname)),
-    )
-    shutil.copy(
-        encoder_params_path,
-        osp.join(app_dir, osp.basename(encoder_params_fname)),
-    )
-    logger.debug(
-        "Copying classifier:\n\t%s\n\t -> %s",
-        clf_path,
-        osp.join(app_dir, clf_fname),
-    )
-    shutil.copy(clf_path, osp.join(app_dir, osp.basename(clf_fname)))
-    logger.debug(
-        "Copying classifier params:\n\t%s\n\t -> %s",
-        clf_params_path,
-        osp.join(app_dir, osp.basename(clf_params_fname)),
-    )
-    shutil.copy(
-        clf_params_path, osp.join(app_dir, osp.basename(clf_params_fname))
-    )
+    # Loop n trials
+    for i, trial in enumerate(top_n_trials):
+
+        # Access hyperparameters and custom user attributes
+        logger.info("Trial number: %s", trial.number)
+        logger.info("Trial codename: %s", trials_to_codenames[trial.number])
+        logger.info("Trial value: %s", trial.value)
+        logger.info("Hyperparameters: %s", trial.params)
+        logger.info("Trial user attributes: %s", trial.user_attrs)
+
+        # Load encoder and classifier file paths (assuming you stored them with trial.set_user_attr)
+        encoder_path = trial.user_attrs["encoder_path"]
+        encoder_params_path = trial.user_attrs["encoder_params_path"]
+        clf_path = trial.user_attrs["clf_path"]
+        clf_params_path = trial.user_attrs["clf_params_path"]
+
+        # Set trial application directory
+        trial_registry = osp.abspath(osp.join(registry, study.name, trials_to_codenames[trial.number]))
+        os.makedirs(trial_registry, exist_ok=True)
+        logger.debug("Copying trial %s to %s", trial.number, trial_registry)
+
+        # Copy models and params to gnn server directory
+        logger.debug(
+            "Copying encoder:\n\t%s\n\t -> %s",
+            encoder_path,
+            osp.join(trial_registry, encoder_fname),
+        )
+        shutil.copy(encoder_path, osp.join(trial_registry, encoder_fname))
+        logger.debug(
+            "Copying encoder params:\n\t%s\n\t -> %s",
+            encoder_params_path,
+            osp.join(trial_registry, osp.basename(encoder_params_fname)),
+        )
+        shutil.copy(
+            encoder_params_path,
+            osp.join(trial_registry, osp.basename(encoder_params_fname)),
+        )
+        logger.debug(
+            "Copying classifier:\n\t%s\n\t -> %s",
+            clf_path,
+            osp.join(trial_registry, clf_fname),
+        )
+        shutil.copy(clf_path, osp.join(trial_registry, osp.basename(clf_fname)))
+        logger.debug(
+            "Copying classifier params:\n\t%s\n\t -> %s",
+            clf_params_path,
+            osp.join(trial_registry, osp.basename(clf_params_fname)),
+        )
+        shutil.copy(
+            clf_params_path, osp.join(trial_registry, osp.basename(clf_params_fname))
+        )
