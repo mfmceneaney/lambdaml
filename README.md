@@ -1,3 +1,5 @@
+[![Docker](https://github.com/mfmceneaney/lambdaml/actions/workflows/docker-image.yml/badge.svg)](https://github.com/mfmceneaney/lambdaml/actions/workflows/docker-image.yml)
+
 # $\Lambda$ ML
 
 This is a project to train Graph Neural Networks (GNNs) for $\Lambda$ hyperon event identification at [CLAS12](https://www.jlab.org/physics/hall-b/clas12).
