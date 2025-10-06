@@ -346,12 +346,12 @@ def pipeline_da(
     # Record output paths of models and parameters for trial
     if trial is not None:
         logger.info("Setting optuna trial attributes")
-        trial.set_user_attr("encoder_path", encoder_path)
-        trial.set_user_attr("encoder_params_path", encoder_params_path)
-        trial.set_user_attr("clf_path", clf_path)
-        trial.set_user_attr("clf_params_path", clf_params_path)
-        trial.set_user_attr("disc_path", disc_path)
-        trial.set_user_attr("disc_params_path", disc_params_path)
+        trial.set_user_attr("encoder_path", osp.join(out_dir, encoder_path))
+        trial.set_user_attr("encoder_params_path", osp.join(out_dir, encoder_params_path))
+        trial.set_user_attr("clf_path", osp.join(out_dir, clf_path))
+        trial.set_user_attr("clf_params_path", osp.join(out_dir, clf_params_path))
+        trial.set_user_attr("disc_path", osp.join(out_dir, disc_path))
+        trial.set_user_attr("disc_params_path", osp.join(out_dir, disc_params_path))
 
     # ----- Test model
     alpha = alpha_fn if not callable(alpha_fn) else alpha_fn(nepochs, nepochs)
@@ -939,12 +939,12 @@ def pipeline_can(
     # Record output paths of models and parameters for trial
     if trial is not None:
         logger.info("Setting optuna trial attributes")
-        trial.set_user_attr("encoder_path", encoder_path)
-        trial.set_user_attr("encoder_params_path", encoder_params_path)
-        trial.set_user_attr("clf_path", clf_path)
-        trial.set_user_attr("clf_params_path", clf_params_path)
-        trial.set_user_attr("projector_path", projector_path)
-        trial.set_user_attr("projector_params_path", projector_params_path)
+        trial.set_user_attr("encoder_path", osp.join(out_dir, encoder_path))
+        trial.set_user_attr("encoder_params_path", osp.join(out_dir, encoder_params_path))
+        trial.set_user_attr("clf_path", osp.join(out_dir, clf_path))
+        trial.set_user_attr("clf_params_path", osp.join(out_dir, clf_params_path))
+        trial.set_user_attr("projector_path", osp.join(out_dir, projector_path))
+        trial.set_user_attr("projector_params_path", osp.join(out_dir, projector_params_path))
 
     # ----- Test model
     temp = temp_fn if not callable(temp_fn) else temp_fn(nepochs, nepochs)
@@ -1528,10 +1528,10 @@ def pipeline_titok(
     # Record output paths of models and parameters for trial
     if trial is not None:
         logger.info("Setting optuna trial attributes")
-        trial.set_user_attr("encoder_path", encoder_path)
-        trial.set_user_attr("encoder_params_path", encoder_params_path)
-        trial.set_user_attr("clf_path", clf_path)
-        trial.set_user_attr("clf_params_path", clf_params_path)
+        trial.set_user_attr("encoder_path", osp.join(out_dir, encoder_path))
+        trial.set_user_attr("encoder_params_path", osp.join(out_dir, encoder_params_path))
+        trial.set_user_attr("clf_path", osp.join(out_dir, clf_path))
+        trial.set_user_attr("clf_params_path", osp.join(out_dir, clf_params_path))
 
     # ----- Test model
     temp = temp_fn if not callable(temp_fn) else temp_fn(nepochs, nepochs)
