@@ -236,7 +236,7 @@ def pipeline_da(
 
     encoder = FlexibleGNNEncoder(
         in_dim=num_node_features,
-        hidden_dim=hdim_gnn,
+        hdim=hdim_gnn,
         num_layers=num_layers_gnn,
         gnn_type=gnn_type,  # Try 'gcn', 'sage', 'gat', 'gin'
         dropout=dropout_gnn,
@@ -247,14 +247,14 @@ def pipeline_da(
         in_dim=hdim_gnn * (heads if gnn_type == "gat" else 1),
         out_dim=num_classes,
         num_layers=num_layers_clf,
-        hidden_dim=hdim_clf,
+        hdim=hdim_clf,
         dropout=dropout_clf,
     ).to(device)
 
     disc = DomainDiscriminator(
         in_dim=hdim_gnn * (heads if gnn_type == "gat" else 1),
         num_layers=num_layers_disc,
-        hidden_dim=hdim_disc,
+        hdim=hdim_disc,
         dropout=dropout_disc,
     ).to(device)
 
@@ -833,7 +833,7 @@ def pipeline_can(
 
     encoder = FlexibleGNNEncoder(
         in_dim=num_node_features,
-        hidden_dim=hdim_gnn,
+        hdim=hdim_gnn,
         num_layers=num_layers_gnn,
         gnn_type=gnn_type,  # Try 'gcn', 'sage', 'gat', 'gin'
         dropout=dropout_gnn,
@@ -844,7 +844,7 @@ def pipeline_can(
         in_dim=hdim_gnn * (heads if gnn_type == "gat" else 1),
         out_dim=num_classes,
         num_layers=num_layers_clf,
-        hidden_dim=hdim_clf,
+        hdim=hdim_clf,
         dropout=dropout_clf,
     ).to(device)
 
@@ -1433,7 +1433,7 @@ def pipeline_titok(
 
     encoder = FlexibleGNNEncoder(
         in_dim=num_node_features,
-        hidden_dim=hdim_gnn,
+        hdim=hdim_gnn,
         num_layers=num_layers_gnn,
         gnn_type=gnn_type,  # Try 'gcn', 'sage', 'gat', 'gin'
         dropout=dropout_gnn,
@@ -1444,7 +1444,7 @@ def pipeline_titok(
         in_dim=hdim_gnn * (heads if gnn_type == "gat" else 1),
         out_dim=num_classes,
         num_layers=num_layers_clf,
-        hidden_dim=hdim_clf,
+        hdim=hdim_clf,
         dropout=dropout_clf,
     ).to(device)
 
