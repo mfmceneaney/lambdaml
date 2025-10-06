@@ -227,7 +227,9 @@ After these are copied you can deploy a model of your choice from a given study 
 singularity exec \
 -B $VOLATILE_DIR,$LAMBDAML_HOME:/usr/src/lambdaml lambdaml-cu129.sif \
 taskset -c 0-31 \
-python3 /usr/src/lambdaml/app/app.py \
+python3 /usr/src/lambdaml/pyscripts/select_best_models.py \
+--n_best_trials 5 \
+--optuna_storage_url "sqlite:///$VOLATILE_DIR/experiments/optuna_study.db" \
 --optuna_study_name 'study' \
 --registry $LAMBDAML_REGISTRY
 ```
