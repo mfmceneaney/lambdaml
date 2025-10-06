@@ -179,7 +179,7 @@ def select_best_models(
 
         # Set trial application directory
         trial_registry = osp.abspath(
-            osp.join(osp.abspath(registry), study.name, trials_to_codenames[trial.number])
+            osp.join(osp.abspath(registry), optuna_study_name, trials_to_codenames[trial.number])
         )
         logger.debug("Creating trial registry directory %s", trial_registry)
         os.makedirs(trial_registry, exist_ok=True)
