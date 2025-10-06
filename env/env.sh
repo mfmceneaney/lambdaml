@@ -1,4 +1,4 @@
 #!/bin/bash
 
 export LAMBDAML_HOME=$PWD
-export LAMBDAML_REGISTRY=$LAMBDAML_HOME/app/registry
+export LAMBDAML_REGISTRY=/usr/src/lambdaml/app/registry
