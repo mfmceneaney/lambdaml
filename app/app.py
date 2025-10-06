@@ -4,6 +4,7 @@ from flask import Flask, request, jsonify
 import sys
 import os
 import os.path as osp
+import subprocess
 
 # Local imports
 from lambdaml.deploy import ModelWrapper
@@ -67,17 +68,17 @@ argparser.add_argument(
 )
 
 argparser.add_argument(
-    "--flask_host",
+    "--host",
     type=str,
     default="0.0.0.0",
-    help="Flask app host name",
+    help="App host name",
 )
 
 argparser.add_argument(
-    "--flask_port",
+    "--port",
     type=int,
     default=5000,
-    help="Flask app port",
+    help="App port",
 )
 
 # Parse arguments and initialize argument dictionary
@@ -122,24 +123,33 @@ if not args["trial_id"] in codenames_to_trials:
             print("\t", trial, "=>\t", trials_to_codenames[trial])
         sys.exit(0)
 
-# Initialialize flask app and model
-app = Flask(__name__)
-trial_dir = osp.join(metadata_dir, args["trial_id"])
-model = ModelWrapper(
-    trial_dir=trial_dir,
-)
+def create_app():
+    # Initialialize flask app and model
+    app = Flask(__name__)
+    trial_dir = osp.join(metadata_dir, args["trial_id"])
+    model = ModelWrapper(
+        trial_dir=trial_dir,
+    )
+    
+    # Define the app
+    @app.route("/predict", methods=["POST"])
+    def predict():
+        bank_tables = request.get_json()
+        try:
+            prob = model.predict(bank_tables)
+            return jsonify({"probability": prob})
+        except TypeError as e:
+            return jsonify({"error": str(e)}), 500
+
+    return app
 
 
-# Define the app
-@app.route("/predict", methods=["POST"])
-def predict():
-    bank_tables = request.get_json()
-    try:
-        prob = model.predict(bank_tables)
-        return jsonify({"probability": prob})
-    except TypeError as e:
-        return jsonify({"error": str(e)}), 500
+# Serve the flask app from gunicorn
+subprocess.run([
+    "gunicorn",
+    "app:create_app()",  # Call factory function
+    "--bind", f"{args["host"]}:{args["port"]}"
+])
 
+app.run(host=args["host"], port=args["port"])
 
-# Run the flaskapp with the specified
-app.run(host=args["flask_host"], port=args["flask_port"])
