@@ -150,7 +150,7 @@ def select_best_models(
 
     # Record top n trials ordering and codenames to trials map
     trials_to_codenames = {
-        str(t.number): codename.codename(id=str(t.number), separator=codename_separator)
+        str(t.number): codename(id=str(t.number), separator=codename_separator)
         for t in top_n_trials
     }
     metadata_dir = osp.join(registry, optuna_study_name)
