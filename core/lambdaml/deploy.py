@@ -177,6 +177,17 @@ def select_best_models(
         clf_path = trial.user_attrs["clf_path"]
         clf_params_path = trial.user_attrs["clf_params_path"]
 
+        # Check that encoder and classifier paths are full paths
+        trial_out_dir = trial.user_attrs["out_dir"]
+        if not encoder_path.startswith(osp.sep):
+            encoder_path = osp.abspath(osp.join(trial_out_dir, encoder_path))
+        if not encoder_params_path.startswith(osp.sep):
+            encoder_params_path = osp.abspath(osp.join(trial_out_dir, encoder_params_path))
+        if not clf_path.startswith(osp.sep):
+            clf_path = osp.abspath(osp.join(trial_out_dir, clf_path))
+        if not clf_params_path.startswith(osp.sep):
+            clf_params_path = osp.abspath(osp.join(trial_out_dir, clf_params_path))
+
         # Set trial application directory
         trial_registry = osp.abspath(
             osp.join(osp.abspath(registry), optuna_study_name, trials_to_codenames[trial.number])
