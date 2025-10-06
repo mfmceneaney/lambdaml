@@ -61,7 +61,7 @@ class ModelWrapper:
             encoder_path,
         )
         self.encoder.load_state_dict(
-            torch.load(encoder_fname, map_location=map_location)
+            torch.load(encoder_path, map_location=map_location)
         )
         self.encoder.eval()
 
@@ -77,7 +77,7 @@ class ModelWrapper:
         logger.debug(
             "Loading classifier state dictionary to %s from %s", map_location, clf_path
         )
-        self.clf.load_state_dict(torch.load(clf_fname, map_location=map_location))
+        self.clf.load_state_dict(torch.load(clf_path, map_location=map_location))
         self.clf.eval()
 
         # Copy models to device
