@@ -29,6 +29,7 @@ dependencies = [
     "flask",
     "pyyaml",
     "codename",
+    "gunicorn",
 ]
 
 [project.optional-dependencies]
