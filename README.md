@@ -40,6 +40,7 @@ docker run --rm lambdaml-project python3 </path/to/my/python/sript.py>
 ```
 Once you start the container you should have the following environment variables:
 - `LAMBDAML_HOME`
+- `LAMBDAML_CONT_HOME`
 - `LAMBDAML_REGISTRY`
 
 If you have input data directories and output data directories for your preprocessing or training pipelines, you can mount several directories.
@@ -143,11 +144,11 @@ python3 pyscripts/<some_script.py> --help
 
 However, for running with actual $\Lambda$ data you will want to first produce the `REC::Kinematic` banks using [CLAS12-Trains](https://github.com/mfmceneaney/CLAS12-Trains).  Assume your output hipo files are in a folder designated by the environment variable `$C12TRAINS_OUTPUT_MC` for MC simulation and `$C12TRAINS_OUTPUT_DT` for data.
 
-Then, you can run the python scripts for data set creation from outside the container.  You will want to mount the `$LAMBDAML_HOME` and your output directory, e.g., `export VOLATILE_DIR=/work/clas12/users/$USER/`.  For the MC simulation dataset run:
+Then, you can run the python scripts for data set creation from outside the container.  You will want to mount the `$LAMBDAML_HOME` and your output directory, e.g., `export VOLATILE_DIR=/volatile/clas12/users/$USER/`.  For the MC simulation dataset run:
 ```bash
 singularity exec \
--B $VOLATILE_DIR,$LAMBDAML_HOME:/usr/src/lambdaml lambdaml-cu129.sif \
-python3 /usr/src/lambdaml/pyscripts/run_pipeline_preprocessing.py \
+-B $VOLATILE_DIR,$LAMBDAML_HOME:$LAMBDAML_CONT_HOME lambdaml-cu129.sif \
+python3 $LAMBDAML_CONT_HOME/pyscripts/run_pipeline_preprocessing.py \
 --file_list $C12TRAINS_OUTPUT_MC/*.hipo \
 --banks REC::Particle REC::Kinematics MC::Lund \
 --step 100000 \
@@ -160,8 +161,8 @@ python3 /usr/src/lambdaml/pyscripts/run_pipeline_preprocessing.py \
 And similarly, for the real data (unlabelled) dataset, run:
 ```bash
 singularity exec \
--B $VOLATILE_DIR,$LAMBDAML_HOME:/usr/src/lambdaml lambdaml-cu129.sif \
-python3 /usr/src/lambdaml/pyscripts/run_pipeline_preprocessing.py \
+-B $VOLATILE_DIR,$LAMBDAML_HOME:$LAMBDAML_CONT_HOME lambdaml-cu129.sif \
+python3 $LAMBDAML_CONT_HOME/pyscripts/run_pipeline_preprocessing.py \
 --file_list $C12TRAINS_OUTPUT_DT/*.hipo \
 --banks REC::Particle REC::Kinematics \
 --step 100000 \
@@ -174,9 +175,9 @@ python3 /usr/src/lambdaml/pyscripts/run_pipeline_preprocessing.py \
 You can then run the TIToK training script like so:
 ```bash
 singularity exec \
--B $VOLATILE_DIR,$LAMBDAML_HOME:/usr/src/lambdaml lambdaml-cu129.sif \
+-B $VOLATILE_DIR,$LAMBDAML_HOME:$LAMBDAML_CONT_HOME lambdaml-cu129.sif \
 taskset -c 0-31 \
-python3 /usr/src/lambdaml/pyscripts/run_pipeline_titok.py \
+python3 $LAMBDAML_CONT_HOME/pyscripts/run_pipeline_titok.py \
 --src_root $VOLATILE_DIR/src_dataset \
 --tgt_root $VOLATILE_DIR/tgt_dataset \
 --out_dir $VOLATILE_DIR/experiments \
@@ -189,9 +190,9 @@ python3 /usr/src/lambdaml/pyscripts/run_pipeline_titok.py \
 And you can run a hyperparameter optimization study like so:
 ```bash
 singularity exec \
--B $VOLATILE_DIR,$LAMBDAML_HOME:/usr/src/lambdaml lambdaml-cu129.sif \
+-B $VOLATILE_DIR,$LAMBDAML_HOME:$LAMBDAML_CONT_HOME lambdaml-cu129.sif \
 taskset -c 0-31 \
-python3 /usr/src/lambdaml/pyscripts/run_optimize_titok.py \
+python3 $LAMBDAML_CONT_HOME/pyscripts/run_optimize_titok.py \
 --src_root $VOLATILE_DIR/src_dataset \
 --tgt_root $VOLATILE_DIR/tgt_dataset \
 --out_dir $VOLATILE_DIR/experiments \
@@ -213,9 +214,9 @@ After running a hyperparameter optimization with one of the scripts in [pyscript
 you will need to select the best or several best models to serve.  Copy these into the `$LAMBDAML_REGISTRY` directory using the [pyscripts/select_best_models.py](pyscripts/select_best_models.py) script.  For example,
 ```bash
 singularity exec \
--B $VOLATILE_DIR,$LAMBDAML_HOME:/usr/src/lambdaml lambdaml-cu129.sif \
+-B $VOLATILE_DIR,$LAMBDAML_HOME:$LAMBDAML_CONT_HOME lambdaml-cu129.sif \
 taskset -c 0-31 \
-python3 /usr/src/lambdaml/pyscripts/select_best_models.py \
+python3 $LAMBDAML_CONT_HOME/pyscripts/select_best_models.py \
 --n_best_trials 10 \
 --optuna_storage_url "sqlite:///$VOLATILE_DIR/experiments/optuna_study.db" \
 --optuna_study_name 'study' \
@@ -225,9 +226,9 @@ python3 /usr/src/lambdaml/pyscripts/select_best_models.py \
 After these are copied you can deploy a model of your choice from a given study for use by other processes.  The model is run as an app with flask.
 ```bash
 singularity exec \
--B $VOLATILE_DIR,$LAMBDAML_HOME:/usr/src/lambdaml lambdaml-cu129.sif \
+-B $VOLATILE_DIR,$LAMBDAML_HOME:$LAMBDAML_CONT_HOME lambdaml-cu129.sif \
 taskset -c 0-31 \
-python3 /usr/src/lambdaml/pyscripts/select_best_models.py \
+python3 $LAMBDAML_CONT_HOME/pyscripts/select_best_models.py \
 --n_best_trials 5 \
 --optuna_storage_url "sqlite:///$VOLATILE_DIR/experiments/optuna_study.db" \
 --optuna_study_name 'study' \
@@ -236,9 +237,9 @@ python3 /usr/src/lambdaml/pyscripts/select_best_models.py \
 This will simply list the available trial ids code names for a given study.  Once you have chosen a trial id or the corresponding codename, you can specify the model.
 ```bash
 singularity exec \
--B $VOLATILE_DIR,$LAMBDAML_HOME:/usr/src/lambdaml lambdaml-cu129.sif \
+-B $VOLATILE_DIR,$LAMBDAML_HOME:$LAMBDAML_CONT_HOME lambdaml-cu129.sif \
 taskset -c 0-31 \
-python3 /usr/src/lambdaml/app/app.py \
+python3 $LAMBDAML_CONT_HOME/app/app.py \
 --optuna_study_name 'study' \
 --registry $LAMBDAML_REGISTRY \
 --trial_id 'best-trial' \
