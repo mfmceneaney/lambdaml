@@ -81,6 +81,13 @@ argparser.add_argument(
     help="App port",
 )
 
+argparser.add_argument(
+    "--mode",
+    type=str,
+    choices=["dev","development","prod","production"]
+    help="App run mode",
+)
+
 # Parse arguments and initialize argument dictionary
 args_raw = argparser.parse_args()
 args = {}
@@ -143,13 +150,39 @@ def create_app():
 
     return app
 
+# Check mode and run
+if args["mode"].lower() in ("production", "prod"):
 
-# Serve the flask app from gunicorn
-subprocess.run([
-    "gunicorn",
-    "app:create_app()",  # Call factory function
-    "--bind", f"{args["host"]}:{args["port"]}"
-])
+    # Serve the flask app from gunicorn
+    subprocess.run([
+        "gunicorn",
+        "app:create_app()",  # Call factory function
+        "--bind", f"{args["host"]}:{args["port"]}"
+    ])
 
-app.run(host=args["host"], port=args["port"])
+    app.run(host=args["host"], port=args["port"])
+
+# Otherwise run in development mode
+else:
+    # Initialialize flask app and model
+    app = Flask(__name__)
+    trial_dir = osp.join(metadata_dir, args["trial_id"])
+    model = ModelWrapper(
+        trial_dir=trial_dir,
+    )
+
+
+    # Define the app
+    @app.route("/predict", methods=["POST"])
+    def predict():
+        bank_tables = request.get_json()
+        try:
+            prob = model.predict(bank_tables)
+            return jsonify({"probability": prob})
+        except TypeError as e:
+            return jsonify({"error": str(e)}), 500
+
+
+    # Run the flaskapp with the specified
+    app.run(host=args["host"], port=args["port"])
 
