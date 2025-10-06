@@ -153,10 +153,10 @@ def select_best_models(
         str(t.number): codename(id=str(t.number), separator=codename_separator)
         for t in top_n_trials
     }
-    metadata_dir = osp.join(registry, optuna_study_name)
+    metadata_dir = osp.join(osp.abspath(registry), optuna_study_name)
     logger.debug("Creating app study directory %s", metadata_dir)
     os.makedirs(metadata_dir, exist_ok=True)
-    metadata_path = osp.join(registry, optuna_study_name, "metadata.json")
+    metadata_path = osp.join(osp.abspath(registry), optuna_study_name, "metadata.json")
     logger.debug("Saving app metadata to %s", metadata_path)
     save_json(metadata_path, trials_to_codenames)
 
@@ -179,8 +179,9 @@ def select_best_models(
 
         # Set trial application directory
         trial_registry = osp.abspath(
-            osp.join(registry, study.name, trials_to_codenames[trial.number])
+            osp.join(osp.abspath(registry), study.name, trials_to_codenames[trial.number])
         )
+        logger.debug("Creating trial registry directory %s", trial_registry)
         os.makedirs(trial_registry, exist_ok=True)
         logger.debug("Copying trial %s to %s", trial.number, trial_registry)
 
