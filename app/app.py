@@ -107,11 +107,11 @@ trials_to_codenames = load_json(metadata_path)
 codenames_to_trials = {trials_to_codenames[key]: key for key in trials_to_codenames}
 
 # Load the appropriate trial id
-if not args["trial_id"] in trials_to_codenames:
+if not args["trial_id"] in codenames_to_trials:
 
     # Check if you were passed the literal trial id and reset to the codename
-    if args["trial_id"] in codenames_to_trials:
-        args["trial_id"] = codenames_to_trials[args["trial_id"]]
+    if args["trial_id"] in trials_to_codenames:
+        args["trial_id"] = trials_to_codenames[args["trial_id"]]
 
     # Otherwise default to just printing out the available codenames
     else:
