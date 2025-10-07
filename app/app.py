@@ -151,7 +151,7 @@ def create_app():
 
     return app
 
-# Check mode and run
+# Run in production mode
 if args["mode"].lower() in ("production", "prod"):
 
     # Serve the flask app from gunicorn
@@ -161,9 +161,7 @@ if args["mode"].lower() in ("production", "prod"):
         "--bind", f"{args["host"]}:{args["port"]}"
     ])
 
-    app.run(host=args["host"], port=args["port"])
-
-# Otherwise run in development mode
+# Or in development mode
 else:
     # Initialialize flask app and model
     app = Flask(__name__)
@@ -171,7 +169,6 @@ else:
     model = ModelWrapper(
         trial_dir=trial_dir,
     )
-
 
     # Define the app
     @app.route("/predict", methods=["POST"])
@@ -183,7 +180,5 @@ else:
         except TypeError as e:
             return jsonify({"error": str(e)}), 500
 
-
     # Run the flaskapp with the specified
     app.run(host=args["host"], port=args["port"])
-
