@@ -40,7 +40,8 @@ docker run --rm lambdaml-project python3 </path/to/my/python/sript.py>
 ```
 Once you start the container you should have the following environment variables:
 - `LAMBDAML_HOME`
-- `LAMBDAML_APP_DIR`
+- `LAMBDAML_CONT_HOME`
+- `LAMBDAML_REGISTRY`
 
 If you have input data directories and output data directories for your preprocessing or training pipelines, you can mount several directories.
 ```bash
@@ -143,11 +144,11 @@ python3 pyscripts/<some_script.py> --help
 
 However, for running with actual $\Lambda$ data you will want to first produce the `REC::Kinematic` banks using [CLAS12-Trains](https://github.com/mfmceneaney/CLAS12-Trains).  Assume your output hipo files are in a folder designated by the environment variable `$C12TRAINS_OUTPUT_MC` for MC simulation and `$C12TRAINS_OUTPUT_DT` for data.
 
-Then, you can run the python scripts for data set creation from outside the container.  You will want to mount the `$LAMBDAML_HOME` and your output directory, e.g., `export VOLATILE_DIR=/work/clas12/users/$USER/`.  For the MC simulation dataset run:
+Then, you can run the python scripts for data set creation from outside the container.  You will want to mount the `$LAMBDAML_HOME` and your output directory, e.g., `export VOLATILE_DIR=/volatile/clas12/users/$USER/`.  For the MC simulation dataset run:
 ```bash
 singularity exec \
--B $VOLATILE_DIR,$LAMBDAML_HOME:/usr/src/lambdaml lambdaml-cu129.sif \
-python3 /usr/src/lambdaml/pyscripts/run_pipeline_preprocessing.py \
+-B $VOLATILE_DIR,$LAMBDAML_HOME:$LAMBDAML_CONT_HOME lambdaml-cu129.sif \
+python3 $LAMBDAML_CONT_HOME/pyscripts/run_pipeline_preprocessing.py \
 --file_list $C12TRAINS_OUTPUT_MC/*.hipo \
 --banks REC::Particle REC::Kinematics MC::Lund \
 --step 100000 \
@@ -160,8 +161,8 @@ python3 /usr/src/lambdaml/pyscripts/run_pipeline_preprocessing.py \
 And similarly, for the real data (unlabelled) dataset, run:
 ```bash
 singularity exec \
--B $VOLATILE_DIR,$LAMBDAML_HOME:/usr/src/lambdaml lambdaml-cu129.sif \
-python3 /usr/src/lambdaml/pyscripts/run_pipeline_preprocessing.py \
+-B $VOLATILE_DIR,$LAMBDAML_HOME:$LAMBDAML_CONT_HOME lambdaml-cu129.sif \
+python3 $LAMBDAML_CONT_HOME/pyscripts/run_pipeline_preprocessing.py \
 --file_list $C12TRAINS_OUTPUT_DT/*.hipo \
 --banks REC::Particle REC::Kinematics \
 --step 100000 \
@@ -174,9 +175,9 @@ python3 /usr/src/lambdaml/pyscripts/run_pipeline_preprocessing.py \
 You can then run the TIToK training script like so:
 ```bash
 singularity exec \
--B $VOLATILE_DIR,$LAMBDAML_HOME:/usr/src/lambdaml lambdaml-cu129.sif \
+-B $VOLATILE_DIR,$LAMBDAML_HOME:$LAMBDAML_CONT_HOME lambdaml-cu129.sif \
 taskset -c 0-31 \
-python3 /usr/src/lambdaml/pyscripts/run_pipeline_titok.py \
+python3 $LAMBDAML_CONT_HOME/pyscripts/run_pipeline_titok.py \
 --src_root $VOLATILE_DIR/src_dataset \
 --tgt_root $VOLATILE_DIR/tgt_dataset \
 --out_dir $VOLATILE_DIR/experiments \
@@ -189,9 +190,9 @@ python3 /usr/src/lambdaml/pyscripts/run_pipeline_titok.py \
 And you can run a hyperparameter optimization study like so:
 ```bash
 singularity exec \
--B $VOLATILE_DIR,$LAMBDAML_HOME:/usr/src/lambdaml lambdaml-cu129.sif \
+-B $VOLATILE_DIR,$LAMBDAML_HOME:$LAMBDAML_CONT_HOME lambdaml-cu129.sif \
 taskset -c 0-31 \
-python3 /usr/src/lambdaml/pyscripts/run_optimize_titok.py \
+python3 $LAMBDAML_CONT_HOME/pyscripts/run_optimize_titok.py \
 --src_root $VOLATILE_DIR/src_dataset \
 --tgt_root $VOLATILE_DIR/tgt_dataset \
 --out_dir $VOLATILE_DIR/experiments \
@@ -201,9 +202,65 @@ python3 /usr/src/lambdaml/pyscripts/run_optimize_titok.py \
 --nepochs 10 \
 --opt__storage_url "sqlite:///$VOLATILE_DIR/experiments/optuna_study.db" \
 --opt__suggestion_rules 'lr=float:0.0001:0.01:log' \
+--opt__study_name 'study' \
 'num_layers_gnn=int:3:8' \
 'alpha_fn=cat:0.1,0.01,sigmoid_growth,sigmoid_decay,linear_growth,linear_decay'
 ```
+
+Of course, there are similar pipeline and optimizations scripts for the domain-adversarial and contrastive loss methods as well.
+
+## :rocket: Deploying a Model
+After running a hyperparameter optimization with one of the scripts in [pyscripts/](pyscripts/),
+you will need to select the best or several best models to serve.  Copy these into the `$LAMBDAML_REGISTRY` directory using the [pyscripts/select_best_models.py](pyscripts/select_best_models.py) script.  For example,
+```bash
+singularity exec \
+-B $VOLATILE_DIR,$LAMBDAML_HOME:$LAMBDAML_CONT_HOME lambdaml-cu129.sif \
+taskset -c 0-31 \
+python3 $LAMBDAML_CONT_HOME/pyscripts/select_best_models.py \
+--n_best_trials 10 \
+--optuna_storage_url "sqlite:///$VOLATILE_DIR/experiments/optuna_study.db" \
+--optuna_study_name 'study' \
+--registry $LAMBDAML_REGISTRY
+```
+
+After these are copied you can deploy a model of your choice from a given study for use by other processes.  The model is run as an app with flask.
+```bash
+singularity exec \
+-B $VOLATILE_DIR,$LAMBDAML_HOME:$LAMBDAML_CONT_HOME lambdaml-cu129.sif \
+taskset -c 0-31 \
+python3 $LAMBDAML_CONT_HOME/pyscripts/select_best_models.py \
+--n_best_trials 5 \
+--optuna_storage_url "sqlite:///$VOLATILE_DIR/experiments/optuna_study.db" \
+--optuna_study_name 'study' \
+--registry $LAMBDAML_REGISTRY
+```
+This will simply list the available trial ids code names for a given study.  Once you have chosen a trial id or the corresponding codename, you can specify the model.
+```bash
+singularity exec \
+-B $VOLATILE_DIR,$LAMBDAML_HOME:$LAMBDAML_CONT_HOME lambdaml-cu129.sif \
+taskset -c 0-31 \
+python3 $LAMBDAML_CONT_HOME/app/app.py \
+--optuna_study_name 'study' \
+--registry $LAMBDAML_REGISTRY \
+--trial_id 'best-trial' \
+--flask_host "0.0.0.0" \
+--flask_port 5000 #NOTE: This will make your service visible on http://localhost:5000
+```
+
+Note however, that this is just a development server.  To run a production server you can run this same script in production mode, which, internally, will call `gunicorn`.
+```bash
+singularity exec \
+-B $VOLATILE_DIR,$LAMBDAML_HOME:$LAMBDAML_CONT_HOME lambdaml-cu129.sif \
+taskset -c 0-31 \
+python3 $LAMBDAML_CONT_HOME/app/app.py \
+--optuna_study_name 'study' \
+--registry $LAMBDAML_REGISTRY \
+--trial_id 'best-trial' \
+--flask_host "0.0.0.0" \
+--flask_port 5000 \
+--mode prod
+```
+
 
 #
 

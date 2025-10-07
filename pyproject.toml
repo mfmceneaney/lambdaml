@@ -28,6 +28,8 @@ dependencies = [
     "plotly",
     "flask",
     "pyyaml",
+    "codename",
+    "gunicorn",
 ]
 
 [project.optional-dependencies]

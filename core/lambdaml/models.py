@@ -39,7 +39,7 @@ class FlexibleGNNEncoder(nn.Module):
     def __init__(
         self,
         in_dim,
-        hidden_dim,
+        hdim,
         num_layers=2,
         gnn_type="gcn",  # Options: 'gcn', 'sage', 'gat', 'gin'
         dropout=0.5,
@@ -53,15 +53,13 @@ class FlexibleGNNEncoder(nn.Module):
         self.gnn_type = gnn_type.lower()
 
         # First layer
-        self.convs.append(self._build_conv(self.gnn_type, in_dim, hidden_dim, heads))
-        self.bns.append(
-            nn.BatchNorm1d(hidden_dim * (heads if self.gnn_type == "gat" else 1))
-        )
+        self.convs.append(self._build_conv(self.gnn_type, in_dim, hdim, heads))
+        self.bns.append(nn.BatchNorm1d(hdim * (heads if self.gnn_type == "gat" else 1)))
 
         # Hidden layers
         for _ in range(num_layers - 1):
-            in_ch = hidden_dim * (heads if self.gnn_type == "gat" else 1)
-            out_ch = hidden_dim
+            in_ch = hdim * (heads if self.gnn_type == "gat" else 1)
+            out_ch = hdim
             self.convs.append(self._build_conv(self.gnn_type, in_ch, out_ch, heads))
             self.bns.append(
                 nn.BatchNorm1d(out_ch * (heads if self.gnn_type == "gat" else 1))
@@ -93,7 +91,7 @@ class FlexibleGNNEncoder(nn.Module):
 
 
 class GraphClassifier(nn.Module):
-    def __init__(self, in_dim, out_dim, num_layers=2, hidden_dim=64, dropout=0.5):
+    def __init__(self, in_dim, out_dim, num_layers=2, hdim=64, dropout=0.5):
         super().__init__()
         self.layers = nn.ModuleList()
         self.dropout = dropout
@@ -102,10 +100,10 @@ class GraphClassifier(nn.Module):
         if num_layers == 1:
             self.layers.append(nn.Linear(in_dim, out_dim))
         else:
-            self.layers.append(nn.Linear(in_dim, hidden_dim))
+            self.layers.append(nn.Linear(in_dim, hdim))
             for _ in range(num_layers - 2):
-                self.layers.append(nn.Linear(hidden_dim, hidden_dim))
-            self.layers.append(nn.Linear(hidden_dim, out_dim))
+                self.layers.append(nn.Linear(hdim, hdim))
+            self.layers.append(nn.Linear(hdim, out_dim))
 
     def forward(self, x):
         for i, layer in enumerate(self.layers):
@@ -117,7 +115,7 @@ class GraphClassifier(nn.Module):
 
 
 class DomainDiscriminator(nn.Module):
-    def __init__(self, in_dim, num_layers=2, hidden_dim=64, dropout=0.5):
+    def __init__(self, in_dim, num_layers=2, hdim=64, dropout=0.5):
         super().__init__()
         self.layers = nn.ModuleList()
         self.dropout = dropout
@@ -125,10 +123,10 @@ class DomainDiscriminator(nn.Module):
         if num_layers == 1:
             self.layers.append(nn.Linear(in_dim, 2))
         else:
-            self.layers.append(nn.Linear(in_dim, hidden_dim))
+            self.layers.append(nn.Linear(in_dim, hdim))
             for _ in range(num_layers - 2):
-                self.layers.append(nn.Linear(hidden_dim, hidden_dim))
-            self.layers.append(nn.Linear(hidden_dim, 2))  # binary domain classification
+                self.layers.append(nn.Linear(hdim, hdim))
+            self.layers.append(nn.Linear(hdim, 2))  # binary domain classification
 
     def forward(self, x, alpha=1.0):
         x = GradReverse.apply(x, alpha)

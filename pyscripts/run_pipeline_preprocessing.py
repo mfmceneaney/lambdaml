@@ -1,5 +1,7 @@
+# pylint: disable=no-member
 import argparse
 import json
+import os.path as osp
 
 # Local imports
 from lambdaml.preprocess import (
@@ -9,6 +11,7 @@ from lambdaml.preprocess import (
 )
 from lambdaml.pipeline import pipeline_preprocessing
 from lambdaml.log import set_global_log_level
+from lambdaml.util import load_yaml
 
 
 # Create argument parser
@@ -26,7 +29,18 @@ argparser.add_argument(
     "--log_level",
     type=str,
     default="INFO",
-    choices=["debug", "info", "warning", "error", "critical", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+    choices=[
+        "debug",
+        "info",
+        "warning",
+        "error",
+        "critical",
+        "DEBUG",
+        "INFO",
+        "WARNING",
+        "ERROR",
+        "CRITICAL",
+    ],
     help="Log level",
 )
 
@@ -65,21 +79,21 @@ argparser.add_argument(
     "--preprocessing_fn_kwargs",
     type=json.loads,
     default=None,
-    help="Preprocessing function kwargs dictionary in JSON format, e.g., '{\"a\": 1, \"b\": 2}'"
+    help='Preprocessing function kwargs dictionary in JSON format, e.g., \'{"a": 1, "b": 2}\'',
 )
 
 argparser.add_argument(
     "--labelling_fn_kwargs",
     type=json.loads,
     default=None,
-    help="Labelling function kwargs dictionary in JSON format, e.g., '{\"a\": 1, \"b\": 2}'"
+    help='Labelling function kwargs dictionary in JSON format, e.g., \'{"a": 1, "b": 2}\'',
 )
 
 argparser.add_argument(
     "--kinematics_fn_kwargs",
     type=json.loads,
     default=None,
-    help="Kinematics function kwargs dictionary in JSON format, e.g., '{\"a\": 1, \"b\": 2}'"
+    help='Kinematics function kwargs dictionary in JSON format, e.g., \'{"a": 1, "b": 2}\'',
 )
 
 argparser.add_argument(
@@ -149,12 +163,18 @@ args.pop("log_level")
 # Loop names of functional arguments and check if a function was actually passed
 fn_names = ("preprocessing_fn", "labelling_fn", "kinematics_fn")
 for fn_name in fn_names:
-    if args[fn_name] is not None and args[fn_name] in fn_choices and callable(fn_choices[args[fn_name]]):
+    if (
+        args[fn_name] is not None
+        and args[fn_name] in fn_choices
+        and callable(fn_choices[args[fn_name]])
+    ):
 
         # Check if any kwargs are given
         arg_fn_name = args[fn_name]
-        if args[fn_name+"_kwargs"] is not None:
-            args[fn_name] = lambda x: fn_choices[arg_fn_name](x, **args[fn_name+"_kwargs"])
+        if args[fn_name + "_kwargs"] is not None:
+            args[fn_name] = lambda *x, fn=fn_name: fn_choices[args[fn]](
+                *x, **args[fn + "_kwargs"]
+            )
         else:
             args[fn_name] = fn_choices[arg_fn_name]
 

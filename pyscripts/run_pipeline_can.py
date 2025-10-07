@@ -1,10 +1,9 @@
 # pylint: disable=no-member
-import yaml
 import json
 import argparse
 import torch
 import torch_geometric.transforms as T
-from torch.optim.lr_scheduler import StepLR
+import os.path as osp
 
 # Local imports
 from lambdaml.pipeline import pipeline_can
@@ -14,17 +13,33 @@ from lambdaml.functional import (
     linear_decay,
     linear_growth,
 )
-from lambdaml.util import float_or_choice
+from lambdaml.util import (
+    float_or_choice,
+    load_yaml,
+)
 from lambdaml.log import set_global_log_level
 
 
-argparser = argparse.ArgumentParser(description="Run contrastive loss training pipeline")
+argparser = argparse.ArgumentParser(
+    description="Run contrastive loss training pipeline"
+)
 
 argparser.add_argument(
     "--log_level",
     type=str,
     default="INFO",
-    choices=["debug", "info", "warning", "error", "critical", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+    choices=[
+        "debug",
+        "info",
+        "warning",
+        "error",
+        "critical",
+        "DEBUG",
+        "INFO",
+        "WARNING",
+        "ERROR",
+        "CRITICAL",
+    ],
     help="Log level",
 )
 
@@ -67,7 +82,16 @@ argparser.add_argument(
     "--transform",
     type=str,
     default=None,
-    choices=[None, "knn_graph1", "knn_graph2", "knn_graph3", "knn_graph4", "knn_graph5", "knn_graph6", "normalize_features"],
+    choices=[
+        None,
+        "knn_graph1",
+        "knn_graph2",
+        "knn_graph3",
+        "knn_graph4",
+        "knn_graph5",
+        "knn_graph6",
+        "normalize_features",
+    ],
     action="append",
     help="Transform(s) to use",
 )
@@ -222,10 +246,10 @@ argparser.add_argument(
 )
 
 argparser.add_argument(
-     "--lr_kwargs",
+    "--lr_kwargs",
     type=json.loads,
     default={"step_size": 50, "gamma": 0.5},
-    help="Learning rate scheduler kwargs dictionary in JSON format, e.g., '{\"a\": 1, \"b\": 2}'"
+    help='Learning rate scheduler kwargs dictionary in JSON format, e.g., \'{"a": 1, "b": 2}\'',
 )
 
 fn_choices = {
@@ -237,30 +261,36 @@ fn_choices = {
 
 argparser.add_argument(
     "--temp_fn",
-    type=lambda value: float_or_choice(value,choices=["sigmoid_growth", "sigmoid_decay", "linear_growth", "linear_decay"]),
+    type=lambda value: float_or_choice(
+        value,
+        choices=["sigmoid_growth", "sigmoid_decay", "linear_growth", "linear_decay"],
+    ),
     default=1.0,
     help="Temperature function",
 )
 
 argparser.add_argument(
-     "--temp_fn_kwargs",
+    "--temp_fn_kwargs",
     type=json.loads,
     default=None,
-    help="Temperature function kwargs dictionary in JSON format, e.g., '{\"a\": 1, \"b\": 2}'"
+    help='Temperature function kwargs dictionary in JSON format, e.g., \'{"a": 1, "b": 2}\'',
 )
 
 argparser.add_argument(
     "--alpha_fn",
-    type=lambda value: float_or_choice(value,choices=["sigmoid_growth", "sigmoid_decay", "linear_growth", "linear_decay"]),
+    type=lambda value: float_or_choice(
+        value,
+        choices=["sigmoid_growth", "sigmoid_decay", "linear_growth", "linear_decay"],
+    ),
     default=1.0,
     help="Alpha function",
 )
 
 argparser.add_argument(
-     "--alpha_fn_kwargs",
+    "--alpha_fn_kwargs",
     type=json.loads,
     default=None,
-    help="Alpha function kwargs dictionary in JSON format, e.g., '{\"a\": 1, \"b\": 2}'"
+    help='Alpha function kwargs dictionary in JSON format, e.g., \'{"a": 1, "b": 2}\'',
 )
 
 argparser.add_argument(
@@ -392,21 +422,29 @@ set_global_log_level(args["log_level"])
 args.pop("log_level")
 
 # Replace values in args that are aliases for complex classes
-args["transform"] = transform_choices[args["transform"]] if args["transform"] is not None else None
+args["transform"] = (
+    transform_choices[args["transform"]] if args["transform"] is not None else None
+)
 
 # Loop names of functional arguments and check if a function was actually passed
 fn_names = ("temp_fn", "alpha_fn")
 for fn_name in fn_names:
-    if args[fn_name] is not None and args[fn_name] in fn_choices and callable(fn_choices[args[fn_name]]):
+    if (
+        args[fn_name] is not None
+        and args[fn_name] in fn_choices
+        and callable(fn_choices[args[fn_name]])
+    ):
 
         # Check if any kwargs are given
-        if args[fn_name+"_kwargs"] is not None:
-            args[fn_name] = lambda *args: fn_choices[args[fn_name]](*args, **args[fn_name+"_kwargs"])
+        if args[fn_name + "_kwargs"] is not None:
+            args[fn_name] = lambda *x, fn=fn_name: fn_choices[args[fn]](
+                *x, **args[fn + "_kwargs"]
+            )
         else:
             args[fn_name] = fn_choices[args[fn_name]]
 
     # Remove kwargs argument
-    args.pop(fn_name+"_kwargs")
+    args.pop(fn_name + "_kwargs")
 
 # Remove config argument
 args.pop("config")

@@ -236,7 +236,7 @@ def pipeline_da(
 
     encoder = FlexibleGNNEncoder(
         in_dim=num_node_features,
-        hidden_dim=hdim_gnn,
+        hdim=hdim_gnn,
         num_layers=num_layers_gnn,
         gnn_type=gnn_type,  # Try 'gcn', 'sage', 'gat', 'gin'
         dropout=dropout_gnn,
@@ -247,14 +247,14 @@ def pipeline_da(
         in_dim=hdim_gnn * (heads if gnn_type == "gat" else 1),
         out_dim=num_classes,
         num_layers=num_layers_clf,
-        hidden_dim=hdim_clf,
+        hdim=hdim_clf,
         dropout=dropout_clf,
     ).to(device)
 
     disc = DomainDiscriminator(
         in_dim=hdim_gnn * (heads if gnn_type == "gat" else 1),
         num_layers=num_layers_disc,
-        hidden_dim=hdim_disc,
+        hdim=hdim_disc,
         dropout=dropout_disc,
     ).to(device)
 
@@ -346,12 +346,14 @@ def pipeline_da(
     # Record output paths of models and parameters for trial
     if trial is not None:
         logger.info("Setting optuna trial attributes")
-        trial.set_user_attr("encoder_path", encoder_path)
-        trial.set_user_attr("encoder_params_path", encoder_params_path)
-        trial.set_user_attr("clf_path", clf_path)
-        trial.set_user_attr("clf_params_path", clf_params_path)
-        trial.set_user_attr("disc_path", disc_path)
-        trial.set_user_attr("disc_params_path", disc_params_path)
+        trial.set_user_attr("encoder_path", osp.join(out_dir, encoder_path))
+        trial.set_user_attr(
+            "encoder_params_path", osp.join(out_dir, encoder_params_path)
+        )
+        trial.set_user_attr("clf_path", osp.join(out_dir, clf_path))
+        trial.set_user_attr("clf_params_path", osp.join(out_dir, clf_params_path))
+        trial.set_user_attr("disc_path", osp.join(out_dir, disc_path))
+        trial.set_user_attr("disc_params_path", osp.join(out_dir, disc_params_path))
 
     # ----- Test model
     alpha = alpha_fn if not callable(alpha_fn) else alpha_fn(nepochs, nepochs)
@@ -833,7 +835,7 @@ def pipeline_can(
 
     encoder = FlexibleGNNEncoder(
         in_dim=num_node_features,
-        hidden_dim=hdim_gnn,
+        hdim=hdim_gnn,
         num_layers=num_layers_gnn,
         gnn_type=gnn_type,  # Try 'gcn', 'sage', 'gat', 'gin'
         dropout=dropout_gnn,
@@ -844,7 +846,7 @@ def pipeline_can(
         in_dim=hdim_gnn * (heads if gnn_type == "gat" else 1),
         out_dim=num_classes,
         num_layers=num_layers_clf,
-        hidden_dim=hdim_clf,
+        hdim=hdim_clf,
         dropout=dropout_clf,
     ).to(device)
 
@@ -939,12 +941,16 @@ def pipeline_can(
     # Record output paths of models and parameters for trial
     if trial is not None:
         logger.info("Setting optuna trial attributes")
-        trial.set_user_attr("encoder_path", encoder_path)
-        trial.set_user_attr("encoder_params_path", encoder_params_path)
-        trial.set_user_attr("clf_path", clf_path)
-        trial.set_user_attr("clf_params_path", clf_params_path)
-        trial.set_user_attr("projector_path", projector_path)
-        trial.set_user_attr("projector_params_path", projector_params_path)
+        trial.set_user_attr("encoder_path", osp.join(out_dir, encoder_path))
+        trial.set_user_attr(
+            "encoder_params_path", osp.join(out_dir, encoder_params_path)
+        )
+        trial.set_user_attr("clf_path", osp.join(out_dir, clf_path))
+        trial.set_user_attr("clf_params_path", osp.join(out_dir, clf_params_path))
+        trial.set_user_attr("projector_path", osp.join(out_dir, projector_path))
+        trial.set_user_attr(
+            "projector_params_path", osp.join(out_dir, projector_params_path)
+        )
 
     # ----- Test model
     temp = temp_fn if not callable(temp_fn) else temp_fn(nepochs, nepochs)
@@ -1433,7 +1439,7 @@ def pipeline_titok(
 
     encoder = FlexibleGNNEncoder(
         in_dim=num_node_features,
-        hidden_dim=hdim_gnn,
+        hdim=hdim_gnn,
         num_layers=num_layers_gnn,
         gnn_type=gnn_type,  # Try 'gcn', 'sage', 'gat', 'gin'
         dropout=dropout_gnn,
@@ -1444,7 +1450,7 @@ def pipeline_titok(
         in_dim=hdim_gnn * (heads if gnn_type == "gat" else 1),
         out_dim=num_classes,
         num_layers=num_layers_clf,
-        hidden_dim=hdim_clf,
+        hdim=hdim_clf,
         dropout=dropout_clf,
     ).to(device)
 
@@ -1528,10 +1534,12 @@ def pipeline_titok(
     # Record output paths of models and parameters for trial
     if trial is not None:
         logger.info("Setting optuna trial attributes")
-        trial.set_user_attr("encoder_path", encoder_path)
-        trial.set_user_attr("encoder_params_path", encoder_params_path)
-        trial.set_user_attr("clf_path", clf_path)
-        trial.set_user_attr("clf_params_path", clf_params_path)
+        trial.set_user_attr("encoder_path", osp.join(out_dir, encoder_path))
+        trial.set_user_attr(
+            "encoder_params_path", osp.join(out_dir, encoder_params_path)
+        )
+        trial.set_user_attr("clf_path", osp.join(out_dir, clf_path))
+        trial.set_user_attr("clf_params_path", osp.join(out_dir, clf_params_path))
 
     # ----- Test model
     temp = temp_fn if not callable(temp_fn) else temp_fn(nepochs, nepochs)
