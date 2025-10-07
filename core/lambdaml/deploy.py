@@ -1,4 +1,3 @@
-# DEPLOY
 # pylint: disable=no-member
 import torch
 from torch_geometric.data import Data
@@ -8,6 +7,8 @@ import shutil
 import os
 import os.path as osp
 from codename import codename
+from flask import Flask, request, jsonify
+
 
 # Local imports
 from .models import FlexibleGNNEncoder, GraphClassifier
@@ -115,9 +116,9 @@ class ModelWrapper:
         # Run the graph through the model
         logger.debug("Applying encoder, classifier, softmax")
         with torch.no_grad():
-            feat = self.encoder(data)
+            feat = self.encoder(data.x, data.edge_index, data.batch)
             logit = self.clf(feat)
-            prob = torch.softmax(logit, dim=1).item()
+            prob = torch.softmax(logit, dim=1).tolist()[0]
 
         return prob
 
