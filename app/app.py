@@ -7,8 +7,7 @@ import os.path as osp
 import subprocess
 
 # Local imports
-from lambdaml.app import create_app
-from lambdaml.deploy import ModelWrapper
+from lambdaml.deploy import ModelWrapper, create_app
 from lambdaml.util import load_yaml, load_json
 from lambdaml.log import set_global_log_level, setup_logger
 
@@ -141,14 +140,15 @@ if args["mode"].lower() in ("production", "prod"):
     # Serve the flask app from gunicorn
     subprocess.run([
         "gunicorn",
-        "lambdaml.app:create_app",  # Call factory function
-        "--bind", f"{args["host"]}:{args["port"]}"
+        "lambdaml.wsgi:app",
+        "--bind", f"{args["host"]}:{args["port"]}",
+        "--log_level", f"{args["log_level"]}",
     ])
 
 # Or in development mode
 else:
     # Initialialize flask app and model
-    app = create_app()
+    dev = create_app()
 
     # Run the flaskapp with the specified
-    app.run(host=args["host"], port=args["port"])
+    dev.run(host=args["host"], port=args["port"])
