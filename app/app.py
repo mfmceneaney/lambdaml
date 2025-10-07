@@ -85,7 +85,34 @@ argparser.add_argument(
     type=str,
     default="dev",
     choices=["dev", "development", "prod", "production"],
-    help="App run mode",
+    help="App run mode: flask for development and gunicorn for production",
+)
+
+argparser.add_argument(
+    "--workers",
+    type=int,
+    default=(
+        os.environ["SLURM_CPUS_ON_NODE"] if "SLURM_CPUS_ON_NODE" in os.environ else 4
+    ),
+    help="(gunicorn) Number of workers",
+)
+
+argparser.add_argument(
+    "--threads", type=int, default=4, help="(gunicorn) Threads per worker"
+)
+
+argparser.add_argument(
+    "--timeout", type=int, default=120, help="(gunicorn) Request timeout in seconds"
+)
+
+argparser.add_argument(
+    "--backlog", type=int, default=2048, help="(gunicorn) Max pending connections"
+)
+
+argparser.add_argument(
+    "--worker-class",
+    default="gthread",
+    help="(gunicorn) Worker class",
 )
 
 # Parse arguments and initialize argument dictionary
@@ -143,8 +170,22 @@ if args["mode"].lower() in ("production", "prod"):
             "lambdaml.wsgi:app",
             "--bind",
             f"{args["host"]}:{args["port"]}",
+            "--workers",
+            f"{args["workers"]}",  # Number of worker processes
+            "--threads",
+            f"{args["threads"]}",  # Threads per worker
+            "--worker-class",
+            f"{args["worker-class"]}",  # Use threaded workers (good for I/O-bound model serving)
+            "--timeout",
+            f"{args["timeout"]}",  # Max time a request can run
+            "--backlog",
+            f"{args["backlog"]}",  # Max waiting connections
             "--log-level",
-            f"{args["log_level"]}",
+            f"{args["log-level"]}",  # Logging verbosity
+            "--access-logfile",
+            "-",  # Log access to stdout
+            "--error-logfile",
+            "-",  # Log errors to stderr
         ],
         check=True,
     )
