@@ -371,24 +371,6 @@ def check_has_decay(
     return has_decay, rec_indices
 
 
-def get_sub_array(arr, indices):
-    """
-    :description: Get sub array at indices along axis 1.
-
-    :param: arr
-    :param: indices
-
-    :return: np.array new_arr
-    """
-
-    new_array = []
-    for i in indices:
-        new_array.append(arr[:, i])
-    new_array = np.moveaxis(np.array(new_array), [0, 1], [1, 0])
-
-    return new_array
-
-
 def replace_pids(arr, pid_map, pid_i=0):
     """
     :description: Replace pids in given array roughly following scheme described in arxiv:1810.05165.
@@ -432,8 +414,8 @@ def preprocess_rec_particle(
 
     # Select requested rows from REC::Particle data
     rec_particle_event_table = data_event_tables[rec_particle_bank_name]
-    rec_particle_event_x = get_sub_array(
-        rec_particle_event_table, rec_particle_entry_indices
+    rec_particle_event_x = np.take(
+        rec_particle_event_table, rec_particle_entry_indices, axis=1
     )
 
     # Set new indices: 0-6 : pid, px, py, pz, beta, chi2pid, status
