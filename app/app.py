@@ -164,21 +164,7 @@ if args["mode"].lower() in ("production", "prod"):
 # Or in development mode
 else:
     # Initialialize flask app and model
-    app = Flask(__name__)
-    trial_dir = osp.join(metadata_dir, args["trial_id"])
-    model = ModelWrapper(
-        trial_dir=trial_dir,
-    )
-
-    # Define the app
-    @app.route("/predict", methods=["POST"])
-    def predict():
-        bank_tables = request.get_json()
-        try:
-            prob = model.predict(bank_tables)
-            return jsonify({"probability": prob})
-        except TypeError as e:
-            return jsonify({"error": str(e)}), 500
+    app = create_app()
 
     # Run the flaskapp with the specified
     app.run(host=args["host"], port=args["port"])
