@@ -247,6 +247,21 @@ python3 $LAMBDAML_CONT_HOME/app/app.py \
 --flask_port 5000 #NOTE: This will make your service visible on http://localhost:5000
 ```
 
+Note however, that this is just a development server.  To run a production server you can run this same script in production mode, which, internally, will call `gunicorn`.
+```bash
+singularity exec \
+-B $VOLATILE_DIR,$LAMBDAML_HOME:$LAMBDAML_CONT_HOME lambdaml-cu129.sif \
+taskset -c 0-31 \
+python3 $LAMBDAML_CONT_HOME/app/app.py \
+--optuna_study_name 'study' \
+--registry $LAMBDAML_REGISTRY \
+--trial_id 'best-trial' \
+--flask_host "0.0.0.0" \
+--flask_port 5000 \
+--mode prod
+```
+
+
 #
 
 Contact: matthew.mceneaney@duke.edu
