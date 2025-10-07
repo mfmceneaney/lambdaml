@@ -1,13 +1,12 @@
 # pylint: disable=no-member
 import argparse
-from flask import Flask, request, jsonify
 import sys
 import os
 import os.path as osp
 import subprocess
 
 # Local imports
-from lambdaml.deploy import ModelWrapper, create_app
+from lambdaml.deploy import create_app
 from lambdaml.util import load_yaml, load_json
 from lambdaml.log import set_global_log_level, setup_logger
 
@@ -143,7 +142,7 @@ if args["mode"].lower() in ("production", "prod"):
         "lambdaml.wsgi:app",
         "--bind", f"{args["host"]}:{args["port"]}",
         "--log-level", f"{args["log_level"]}",
-    ])
+    ], check=True)
 
 # Or in development mode
 else:
