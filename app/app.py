@@ -186,7 +186,7 @@ if args["mode"].lower() in ("production", "prod"):
             "--backlog",
             f"{args["backlog"]}",  # Max waiting connections
             "--log-level",
-            f"{args["log-level"]}",  # Logging verbosity
+            f"{log_level}",  # Logging verbosity
             "--access-logfile",
             "-",  # Log access to stdout
             "--error-logfile",
