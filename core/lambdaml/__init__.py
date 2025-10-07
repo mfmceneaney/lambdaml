@@ -4,7 +4,6 @@ Lambdaml - An ML Project for Lambda Hyperon Identification
 
 __version__ = "0.0.0"
 
-from .app import *
 from .data import *
 from .deploy import *
 from .log import *
