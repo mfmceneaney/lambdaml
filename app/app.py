@@ -142,7 +142,7 @@ if args["mode"].lower() in ("production", "prod"):
         "gunicorn",
         "lambdaml.wsgi:app",
         "--bind", f"{args["host"]}:{args["port"]}",
-        "--log_level", f"{args["log_level"]}",
+        "--log-level", f"{args["log_level"]}",
     ])
 
 # Or in development mode
