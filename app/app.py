@@ -84,7 +84,8 @@ argparser.add_argument(
 argparser.add_argument(
     "--mode",
     type=str,
-    choices=["dev","development","prod","production"]
+    default="dev",
+    choices=["dev","development","prod","production"],
     help="App run mode",
 )
 
