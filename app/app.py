@@ -7,6 +7,7 @@ import os.path as osp
 import subprocess
 
 # Local imports
+from lambdaml.app import create_app
 from lambdaml.deploy import ModelWrapper
 from lambdaml.util import load_yaml, load_json
 from lambdaml.log import set_global_log_level, setup_logger
@@ -131,25 +132,8 @@ if not args["trial_id"] in codenames_to_trials:
             print("\t", trial, "=>\t", trials_to_codenames[trial])
         sys.exit(0)
 
-def create_app():
-    # Initialialize flask app and model
-    app = Flask(__name__)
-    trial_dir = osp.join(metadata_dir, args["trial_id"])
-    model = ModelWrapper(
-        trial_dir=trial_dir,
-    )
-    
-    # Define the app
-    @app.route("/predict", methods=["POST"])
-    def predict():
-        bank_tables = request.get_json()
-        try:
-            prob = model.predict(bank_tables)
-            return jsonify({"probability": prob})
-        except TypeError as e:
-            return jsonify({"error": str(e)}), 500
-
-    return app
+# Set config path for app called in create_app
+os.environ['APP_CONFIG_PATH'] = osp.join(metadata_dir, args["trial_id"])
 
 # Run in production mode
 if args["mode"].lower() in ("production", "prod"):
@@ -157,7 +141,7 @@ if args["mode"].lower() in ("production", "prod"):
     # Serve the flask app from gunicorn
     subprocess.run([
         "gunicorn",
-        "app:create_app()",  # Call factory function
+        "lambdaml.app:create_app",  # Call factory function
         "--bind", f"{args["host"]}:{args["port"]}"
     ])
 
