@@ -347,7 +347,9 @@ def pipeline_da(
     if trial is not None:
         logger.info("Setting optuna trial attributes")
         trial.set_user_attr("encoder_path", osp.join(out_dir, encoder_path))
-        trial.set_user_attr("encoder_params_path", osp.join(out_dir, encoder_params_path))
+        trial.set_user_attr(
+            "encoder_params_path", osp.join(out_dir, encoder_params_path)
+        )
         trial.set_user_attr("clf_path", osp.join(out_dir, clf_path))
         trial.set_user_attr("clf_params_path", osp.join(out_dir, clf_params_path))
         trial.set_user_attr("disc_path", osp.join(out_dir, disc_path))
@@ -940,11 +942,15 @@ def pipeline_can(
     if trial is not None:
         logger.info("Setting optuna trial attributes")
         trial.set_user_attr("encoder_path", osp.join(out_dir, encoder_path))
-        trial.set_user_attr("encoder_params_path", osp.join(out_dir, encoder_params_path))
+        trial.set_user_attr(
+            "encoder_params_path", osp.join(out_dir, encoder_params_path)
+        )
         trial.set_user_attr("clf_path", osp.join(out_dir, clf_path))
         trial.set_user_attr("clf_params_path", osp.join(out_dir, clf_params_path))
         trial.set_user_attr("projector_path", osp.join(out_dir, projector_path))
-        trial.set_user_attr("projector_params_path", osp.join(out_dir, projector_params_path))
+        trial.set_user_attr(
+            "projector_params_path", osp.join(out_dir, projector_params_path)
+        )
 
     # ----- Test model
     temp = temp_fn if not callable(temp_fn) else temp_fn(nepochs, nepochs)
@@ -1529,7 +1535,9 @@ def pipeline_titok(
     if trial is not None:
         logger.info("Setting optuna trial attributes")
         trial.set_user_attr("encoder_path", osp.join(out_dir, encoder_path))
-        trial.set_user_attr("encoder_params_path", osp.join(out_dir, encoder_params_path))
+        trial.set_user_attr(
+            "encoder_params_path", osp.join(out_dir, encoder_params_path)
+        )
         trial.set_user_attr("clf_path", osp.join(out_dir, clf_path))
         trial.set_user_attr("clf_params_path", osp.join(out_dir, clf_params_path))
 

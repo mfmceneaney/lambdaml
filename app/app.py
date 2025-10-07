@@ -84,7 +84,7 @@ argparser.add_argument(
     "--mode",
     type=str,
     default="dev",
-    choices=["dev","development","prod","production"],
+    choices=["dev", "development", "prod", "production"],
     help="App run mode",
 )
 
@@ -131,18 +131,23 @@ if not args["trial_id"] in codenames_to_trials:
         sys.exit(0)
 
 # Set config path for app called in create_app
-os.environ['APP_CONFIG_PATH'] = osp.join(metadata_dir, args["trial_id"])
+os.environ["APP_CONFIG_PATH"] = osp.join(metadata_dir, args["trial_id"])
 
 # Run in production mode
 if args["mode"].lower() in ("production", "prod"):
 
     # Serve the flask app from gunicorn
-    subprocess.run([
-        "gunicorn",
-        "lambdaml.wsgi:app",
-        "--bind", f"{args["host"]}:{args["port"]}",
-        "--log-level", f"{args["log_level"]}",
-    ], check=True)
+    subprocess.run(
+        [
+            "gunicorn",
+            "lambdaml.wsgi:app",
+            "--bind",
+            f"{args["host"]}:{args["port"]}",
+            "--log-level",
+            f"{args["log_level"]}",
+        ],
+        check=True,
+    )
 
 # Or in development mode
 else:

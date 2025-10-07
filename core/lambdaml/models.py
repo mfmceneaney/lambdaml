@@ -54,9 +54,7 @@ class FlexibleGNNEncoder(nn.Module):
 
         # First layer
         self.convs.append(self._build_conv(self.gnn_type, in_dim, hdim, heads))
-        self.bns.append(
-            nn.BatchNorm1d(hdim * (heads if self.gnn_type == "gat" else 1))
-        )
+        self.bns.append(nn.BatchNorm1d(hdim * (heads if self.gnn_type == "gat" else 1)))
 
         # Hidden layers
         for _ in range(num_layers - 1):

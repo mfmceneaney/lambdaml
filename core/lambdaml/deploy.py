@@ -183,7 +183,9 @@ def select_best_models(
         if not encoder_path.startswith(osp.sep):
             encoder_path = osp.abspath(osp.join(trial_out_dir, encoder_path))
         if not encoder_params_path.startswith(osp.sep):
-            encoder_params_path = osp.abspath(osp.join(trial_out_dir, encoder_params_path))
+            encoder_params_path = osp.abspath(
+                osp.join(trial_out_dir, encoder_params_path)
+            )
         if not clf_path.startswith(osp.sep):
             clf_path = osp.abspath(osp.join(trial_out_dir, clf_path))
         if not clf_params_path.startswith(osp.sep):
@@ -191,7 +193,11 @@ def select_best_models(
 
         # Set trial application directory
         trial_registry = osp.abspath(
-            osp.join(osp.abspath(registry), optuna_study_name, trials_to_codenames[trial.number])
+            osp.join(
+                osp.abspath(registry),
+                optuna_study_name,
+                trials_to_codenames[trial.number],
+            )
         )
         logger.debug("Creating trial registry directory %s", trial_registry)
         os.makedirs(trial_registry, exist_ok=True)
@@ -233,9 +239,9 @@ def create_app():
     # Initialialize flask app and model
     app = Flask(__name__)
     model = ModelWrapper(
-        trial_dir=os.environ['APP_CONFIG_PATH'],
+        trial_dir=os.environ["APP_CONFIG_PATH"],
     )
-    
+
     # Define the app
     @app.route("/predict", methods=["POST"])
     def predict():
