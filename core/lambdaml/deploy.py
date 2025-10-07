@@ -227,3 +227,25 @@ def select_best_models(
         shutil.copy(
             clf_params_path, osp.join(trial_registry, osp.basename(clf_params_fname))
         )
+
+
+def create_app():
+    # Initialialize flask app and model
+    app = Flask(__name__)
+    model = ModelWrapper(
+        trial_dir=os.environ['APP_CONFIG_PATH'],
+    )
+    
+    # Define the app
+    @app.route("/predict", methods=["POST"])
+    def predict():
+        data = request.get_json()
+        logger.debug("data = %s", data)
+        try:
+            prob = model.predict(data)
+            return jsonify({"probability": prob})
+        except TypeError as e:
+            logger.debug("%s", e)
+            return jsonify({"error": str(e)}), 500
+
+    return app
