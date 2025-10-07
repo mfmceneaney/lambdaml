@@ -111,6 +111,7 @@ argparser.add_argument(
 
 argparser.add_argument(
     "--worker-class",
+    type=str,
     default="gthread",
     help="(gunicorn) Worker class",
 )
@@ -127,9 +128,11 @@ if args_raw.config is not None and osp.exists(args_raw.config):
 else:
     args = vars(args_raw)
 
+logger.debug("Original args = %s", args)
+
 # Set log level
 set_global_log_level(args["log_level"])
-args.pop("log_level")
+log_level = args.pop("log_level")
 
 # Remove config argument
 args.pop("config")
@@ -160,6 +163,8 @@ if not args["trial_id"] in codenames_to_trials:
 # Set config path for app called in create_app
 os.environ["APP_CONFIG_PATH"] = osp.join(metadata_dir, args["trial_id"])
 
+logger.debug("Updated args = %s", args)
+
 # Run in production mode
 if args["mode"].lower() in ("production", "prod"):
 
@@ -175,7 +180,7 @@ if args["mode"].lower() in ("production", "prod"):
             "--threads",
             f"{args["threads"]}",  # Threads per worker
             "--worker-class",
-            f"{args["worker-class"]}",  # Use threaded workers (good for I/O-bound model serving)
+            f"{args["worker_class"]}",  # Use threaded workers (good for I/O-bound model serving)
             "--timeout",
             f"{args["timeout"]}",  # Max time a request can run
             "--backlog",
