@@ -44,6 +44,8 @@ export DEBIAN_FRONTEND=noninteractive
 export LANG=C.UTF-8
 export VIRTUAL_ENV=/opt/venv
 export PATH="$VIRTUAL_ENV/bin:$PATH"
+export LAMBDAML_CONT_HOME=/usr/src/lambdaml
+export LAMBDAML_REGISTRY="$LAMBDAML_CONT_HOME/app/registry"
 %runscript
 cd /usr/src/lambdaml
 exec /bin/bash /bin/bash -c source /usr/src/lambdaml/env/env.sh && exec bash "$@"
