@@ -133,7 +133,7 @@ def select_best_models(
     encoder_params_fname="encoder_params.json",
     clf_fname="clf.pt",
     clf_params_fname="clf_params.json",
-    direction="maximize",
+    optuna_study_direction="maximize",
 ):
 
     # Connect to the study in the SQL DB
@@ -151,7 +151,7 @@ def select_best_models(
     top_n_trials = sorted(completed_trials, key=lambda t: t.value)
     top_n_trials = (
         top_n_trials[:n_best_trials]
-        if direction == "minimize"
+        if optuna_study_direction == "minimize"
         else top_n_trials[-n_best_trials:]
     )
 
