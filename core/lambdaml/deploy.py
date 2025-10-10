@@ -149,7 +149,11 @@ def select_best_models(
 
     # Sort by objective value (ascending for minimization)
     top_n_trials = sorted(completed_trials, key=lambda t: t.value)
-    top_n_trials = top_n_trials[:n_best_trials] if direction == "minimize" else top_n_trials[-n_best_trials:]
+    top_n_trials = (
+        top_n_trials[:n_best_trials]
+        if direction == "minimize"
+        else top_n_trials[-n_best_trials:]
+    )
 
     # Record top n trials ordering and codenames to trials map
     trials_to_codenames = {
