@@ -61,6 +61,14 @@ argparser.add_argument(
 )
 
 argparser.add_argument(
+    "--optuna_study_direction",
+    type=str,
+    default="maximize",
+    choices=["minimize", "maximize"],
+    help="Optuna study direction",
+)
+
+argparser.add_argument(
     "--registry",
     type=str,
     default=(

@@ -133,6 +133,7 @@ def select_best_models(
     encoder_params_fname="encoder_params.json",
     clf_fname="clf.pt",
     clf_params_fname="clf_params.json",
+    direction="maximize",
 ):
 
     # Connect to the study in the SQL DB
@@ -147,7 +148,12 @@ def select_best_models(
     ]
 
     # Sort by objective value (ascending for minimization)
-    top_n_trials = sorted(completed_trials, key=lambda t: t.value)[:n_best_trials]
+    top_n_trials = sorted(completed_trials, key=lambda t: t.value)
+    top_n_trials = (
+        top_n_trials[:n_best_trials]
+        if direction == "minimize"
+        else top_n_trials[-n_best_trials:]
+    )
 
     # Record top n trials ordering and codenames to trials map
     trials_to_codenames = {
