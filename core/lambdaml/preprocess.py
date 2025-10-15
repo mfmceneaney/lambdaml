@@ -419,7 +419,7 @@ def preprocess_rec_particle(
     if 0 in np.shape(rec_particle_event_table):
         return (
             torch.tensor([[0.0] * len(rec_particle_entry_indices)], dtype=torch.float32),
-            torch.tensor([[0, 0]], dtype=torch.long),
+            torch.tensor([[0], [0]], dtype=torch.long),
         )
 
     # Take selected rows
