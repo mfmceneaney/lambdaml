@@ -254,7 +254,7 @@ def create_app():
         logger.debug("data = %s", data)
         try:
             prob = model.predict(data)
-            return jsonify({"probability": prob})
+            return jsonify({"predictions": prob})
         except TypeError as e:
             logger.debug("%s", e)
             return jsonify({"error": str(e)}), 500
