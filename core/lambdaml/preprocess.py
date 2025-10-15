@@ -414,6 +414,15 @@ def preprocess_rec_particle(
 
     # Select requested rows from REC::Particle data
     rec_particle_event_table = data_event_tables[rec_particle_bank_name]
+
+    # Check REC::Particle has non-zero size
+    if 0 in rec_particle_event_table.shape:
+        return (
+            torch.tensor([[0.0] * len(rec_particle_entry_indices)], dtype=torch.float32),
+            torch.tensor([[0, 0]], dtype=torch.long),
+        )
+
+    # Take selected rows
     rec_particle_event_x = np.take(
         rec_particle_event_table, rec_particle_entry_indices, axis=1
     )
