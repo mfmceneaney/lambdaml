@@ -418,7 +418,9 @@ def preprocess_rec_particle(
     # Check REC::Particle has non-zero size
     if 0 in np.shape(rec_particle_event_table):
         return (
-            torch.tensor([[0.0] * len(rec_particle_entry_indices)], dtype=torch.float32),
+            torch.tensor(
+                [[0.0] * len(rec_particle_entry_indices)], dtype=torch.float32
+            ),
             torch.tensor([[0], [0]], dtype=torch.long),
         )
 
