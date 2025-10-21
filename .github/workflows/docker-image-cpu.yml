@@ -1,0 +1,35 @@
+name: Docker Image
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  build-container:
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      packages: write  # Required for pushing to GHCR
+      contents: read
+
+    steps:
+    - name: Checkout code for the container builds
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Log in to GitHub Container Registry
+      run: |
+        echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+    - name: Build the Docker image
+      run: |
+        docker build . -f docker/Dockerfile.cpu --tag ghcr.io/${{ github.repository }}-docker:latest
+
+    - name: Push image to GHCR
+      run: |
+        docker push ghcr.io/${{ github.repository }}-docker-cpu:latest
