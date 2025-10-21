@@ -28,7 +28,7 @@ jobs:
 
     - name: Build the Docker image
       run: |
-        docker build . -f docker/Dockerfile.cpu --tag ghcr.io/${{ github.repository }}-docker:latest
+        docker build . -f docker/Dockerfile.cpu --tag ghcr.io/${{ github.repository }}-docker-cpu:latest
 
     - name: Push image to GHCR
       run: |
