@@ -1,0 +1,27 @@
+name: Singularity Image
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-container:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    container:
+      image: quay.io/singularity/singularity:v4.3.1
+      options: --privileged
+
+    name: Build Container
+    steps:
+
+      - name: Check out code for the container builds
+        uses: actions/checkout@v4
+
+      - name: Build Singularity Image
+        run: |
+           singularity build lambdaml.sif singularity/lambdaml.def.cpu

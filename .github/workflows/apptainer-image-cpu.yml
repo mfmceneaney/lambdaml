@@ -1,0 +1,34 @@
+name: Apptainer Image
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-container:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    container:
+        image: ghcr.io/apptainer/apptainer:1.4.1
+        options: --privileged
+
+    name: Build Container
+    steps:
+
+      - name: Check out code for the container builds
+        uses: actions/checkout@v4
+
+      - name: Build Apptainer Image
+        run: |
+           apptainer build lambdaml.sif singularity/lambdaml.def.cpu
+
+      - name: Push SIF to GHCR using ORAS
+        # Use default registry user ${{ github.repository_owner }} , or set a secret ${{ secrets.GHCR_USERNAME }}
+        run: |
+           echo ${{ secrets.GITHUB_TOKEN }} | apptainer registry login -u ${{ github.repository_owner }} --password-stdin oras://ghcr.io
+           apptainer push lambdaml.sif oras://ghcr.io/${{ github.repository }}-apptainer-cpu:latest

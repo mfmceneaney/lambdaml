@@ -1,0 +1,55 @@
+Bootstrap: docker
+From: docker.io/python:3.13-slim
+Stage: spython-base
+
+%files
+. /usr/src/lambdaml
+%post
+
+DEBIAN_FRONTEND=noninteractive
+LANG=C.UTF-8
+VIRTUAL_ENV=/opt/venv
+PATH="$VIRTUAL_ENV/bin:$PATH"
+
+# Install build tools, venv support
+apt-get update && \
+apt-get install -y --no-install-recommends \
+bash \
+git \
+build-essential \
+cmake \
+texlive-latex-base \
+texlive-latex-recommended \
+texlive-latex-extra \
+texlive-fonts-recommended \
+cm-super && \
+apt-get clean && \
+rm -rf /var/lib/apt/lists/*
+
+# Create Python virtual environment with system Python
+python3 -m venv $VIRTUAL_ENV
+
+# Set working directory
+mkdir -p /usr/src/lambdaml
+cd /usr/src/lambdaml
+
+# Install python modules
+pip install --upgrade pip && \
+pip install torch==2.8.0+cpu --index-url https://download.pytorch.org/whl/cpu && \
+pip install -e . && \
+pip install -r requirements-pyg-pt28-cpu.txt && \
+pip cache purge
+
+%environment
+export DEBIAN_FRONTEND=noninteractive
+export LANG=C.UTF-8
+export VIRTUAL_ENV=/opt/venv
+export PATH="$VIRTUAL_ENV/bin:$PATH"
+export LAMBDAML_CONT_HOME=/usr/src/lambdaml
+export LAMBDAML_REGISTRY="$LAMBDAML_CONT_HOME/app/registry"
+%runscript
+cd /usr/src/lambdaml
+exec /bin/bash /bin/bash -c source /usr/src/lambdaml/env/env.sh && exec bash "$@"
+%startscript
+cd /usr/src/lambdaml
+exec /bin/bash /bin/bash -c source /usr/src/lambdaml/env/env.sh && exec bash "$@"

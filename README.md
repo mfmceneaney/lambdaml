@@ -1,24 +1,23 @@
-[![Docker](https://github.com/mfmceneaney/lambdaml/actions/workflows/docker-image.yml/badge.svg)](https://github.com/mfmceneaney/lambdaml/actions/workflows/docker-image.yml)
+[![Docker-Image-CPU](https://github.com/mfmceneaney/lambdaml/actions/workflows/docker-image-cpu.yml/badge.svg)](https://github.com/mfmceneaney/lambdaml/actions/workflows/docker-image-cpu.yml)
+[![Apptainer-Image-CPU](https://github.com/mfmceneaney/lambdaml/actions/workflows/apptainer-image-cpu.yml/badge.svg)](https://github.com/mfmceneaney/lambdaml/actions/workflows/apptainer-image-cpu.yml)
+[![Singularity-Image-CPU](https://github.com/mfmceneaney/lambdaml/actions/workflows/singularity-image-cpu.yml/badge.svg)](https://github.com/mfmceneaney/lambdaml/actions/workflows/singularity-image-cpu.yml)
 
 # $\Lambda$ ML
 
 This is a project to train Graph Neural Networks (GNNs) for $\Lambda$ hyperon event identification at [CLAS12](https://www.jlab.org/physics/hall-b/clas12).
 [Domain Adversarial](https://arxiv.org/abs/1505.07818), [Contrastive Adaptation](http://arxiv.org/abs/1901.00976), and [TIToK](https://www.sciencedirect.com/science/article/pii/S0893608023002137) approaches are implemented for adapting models to target data domains.
 
-## :green_circle: Installation
+## :green_circle: Containerized Installation
 
-You can use either a container image via [Docker](https://www.docker.com) or [Singularity/Apptainer](https://github.com/apptainer/apptainer) or install manually assuming you have python installed.
+You can use either a container image via [Docker](https://www.docker.com) or [apptainer](https://github.com/apptainer/apptainer)/[singularity](https://github.com/sylabs/singularity) or install manually (not recommended).
 
-### Installation Via Docker
+### Docker
 
-Begin by cloning the repository:
+Clone and build the project (this may take a while).
 ```bash
 git clone https://github.com/mfmceneaney/lambdaml.git
-```
-
-Then, build the project (this may take a while).
-```bash
-docker build -f /path/to/lambdaml/Dockerfile.cpu -t lambdaml-project /path/to/lambdaml #Note: There is also a cuda Dockerfile.
+cd lambdaml
+docker build -f /path/to/lambdaml/docker/Dockerfile.cpu -t lambdaml-project /path/to/lambdaml #Note: There is also a cuda Dockerfile.
 ```
 After successfully building, run the project with:
 ```bash
@@ -49,13 +48,12 @@ docker run --rm -it -v /path/to/lambdaml:/usr/src/lambdaml -v /path/for/input/fi
 ```
 For use with CUDA, see the bit about installing PyTorch-Geometric on an HPC cluster below as well.
 
-<details>
-<summary>:red_circle: Running in a SLURM Job</summary>
+### Apptainer and Singularity for HPC
 
-It is very hard to access the different volumes of a HPC cluster from Docker, so use singularity instead.
+It is very hard to access the different volumes of a HPC cluster from Docker, so use apptainer or singularity instead.
 Download the PyTorch-Geometric packages and copy them to `/path/to/lambdaml/pyg_packages`. Then, build the container with
 ```bash
-singularity build lambdaml-cu129.sif Singularity.def.cu129
+singularity build lambdaml-cu129.sif singularity/lambdaml.def.cu129
 ```
 Then run the container, binding to some volumes on your cluster, with
 ```bash
@@ -65,6 +63,10 @@ Or, if you just need to run a python script within the container
 ```bash
 singularity exec -B /volatile,/path/to/lambdaml:/usr/src/lambdaml lambdaml-cu129.sif python3 /usr/src/lambdaml/pyscripts/<SCRIPT>.py --help
 ```
+
+<details>
+<summary> :red_circle: Avoiding OpenBLAS Errors</summary>
+
 Also, when running t-SNE latent space visualization on HPC, you may get the following error due to the fact that you can have many more cores available than the precompiled allowed numbers for OpenBLAS libraries used in numpy and torch.
 ```bash
 OpenBLAS warning: precompiled NUM_THREADS exceeded, adding auxiliary array for thread metadata.
@@ -82,7 +84,7 @@ singularity exec -B /volatile,/path/to/lambdaml:/usr/src/lambdaml lambdaml-cu129
 
 </details>
 
-### Installation by Hand
+## :green_circle: Installation by Hand
 
 Begin by cloning the repository
 ```bash
